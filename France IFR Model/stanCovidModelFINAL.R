@@ -127,9 +127,17 @@ fitprobICUOverallF<-t(apply(chains$probICUByAgeF,2,quantile,probs=c(0.025,0.25,0
 fitprobDeathOverallM<-t(apply(chains$probDeathByAgeM,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
 fitprobDeathOverallF<-t(apply(chains$probDeathByAgeF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
 
-#Added more granular extract:
+# Added more granular extract:
+
 Male_probDeath<-t(apply(chains$probDeathByAgeM,2,quantile,probs=(0:100)/100,na.rm=T))
 Female_probDeath<-t(apply(chains$probDeathByAgeF,2,quantile,probs=(0:100)/100,na.rm=T))
+
+Male_probHosp<-t(apply(chains$probHospByAgeM,2,quantile,probs=(0:100)/100,na.rm=T))
+Female_probHosp<-t(apply(chains$probHospByAgeF,2,quantile,probs=(0:100)/100,na.rm=T))
+
+Male_probICU<-t(apply(chains$probICUByAgeM,2,quantile,probs=(0:100)/100,na.rm=T))
+Female_probICU<-t(apply(chains$probICUByAgeF,2,quantile,probs=(0:100)/100,na.rm=T))
+
 
 rowlabel = list()
 for (i in 1:length(agesLower)){
@@ -138,9 +146,20 @@ for (i in 1:length(agesLower)){
 
 rownames(Male_probDeath) <- rowlabel
 rownames(Female_probDeath) <- rowlabel
+rownames(Male_probHosp) <- rowlabel
+rownames(Female_probHosp) <- rowlabel
+rownames(Male_probICU) <- rowlabel
+rownames(Female_probICU) <- rowlabel
+
 
 write.csv(Male_probDeath,"../France_Male_p_death_by_age_range.csv")
 write.csv(Female_probDeath,"../France_Female_p_death_by_age_range.csv")
+write.csv(Male_probHosp,"../France_Male_p_hospitalization_by_age_range.csv")
+write.csv(Female_probHosp,"../France_Female_p_hospitalization_by_age_range.csv")
+write.csv(Male_probICU,"../France_Male_p_death_by_age_range.csv")
+write.csv(Female_probICU,"../France_Female_p_death_by_age_range.csv")
+
+
 
 # Commented out because not relevant to IFR paper:
 # 
