@@ -14,7 +14,7 @@ Participants = 35
 
 # This will be the code to preprocess inputs.
 
-# For now, I just pull 95% for France for 20-29.
+# Ideally, structure the data into a single dataframe to pull numbers from.
 
 # Load data from files.
 
@@ -25,15 +25,10 @@ Female_probHosp <- read.csv("France_Female_p_hospitalization_by_age_range.csv", 
 Male_probICU <- read.csv("France_Male_p_death_by_age_range.csv", row.names=1, check.names=FALSE)
 Female_probICU <- read.csv("France_Female_p_death_by_age_range.csv", row.names=1, check.names=FALSE)
 
-China_probICU <- read.csv("China_p_death_by_age_range.csv", row.names=1, check.names=FALSE)
-China_probDeath <- read.csv("China_p_severe_by_age_range.csv", row.names=1, check.names=FALSE)
+# Not currently used:
 
-
-# Ideally, structure the data into a single dataframe to pull numbers from.
-
-
-
-
+# China_probICU <- read.csv("China_p_death_by_age_range.csv", row.names=1, check.names=FALSE)
+# China_probDeath <- read.csv("China_p_severe_by_age_range.csv", row.names=1, check.names=FALSE)
 
 
 # Note: we are estimating risks from intentional infections. Our 95% assurance level is 1-directional, i.e. we are 95% certain the risk is under this level.
@@ -88,17 +83,18 @@ StudyRisk = function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender=
 
 #Assumes that per-gender and per-age percentiles are perfectly correlated, i.e. we pick a single random number for the full study for each simulation across all ages and genders.
 
-Simulate_StudyRisks = function(Simulations = 1000, Participants=1, Age_Range='20 to 29', gender='f'){
+Simulate_StudyRisks = function(Simulations = 1000, Participants=1, Age_Range='20 to 29', gender='f',qtile=c(0.95)){
   P_per_sim = runif(Simulations, min=0, max=100)
   death_probs=c()
   hosp_probs=c()
   for(i in 1:Simulations){
     P=paste0(as.character(round(P_per_sim[i])),"%")
-    death_probs[i]= StudyRisk(Participants=1, Age_Range=Age_Range, gender=gender, outcome='death', Pctile = P)
-    hosp_probs[i] = StudyRisk(Participants=1, Age_Range=Age_Range, gender=gender, outcome='hosp', Pctile = P)
+    death_probs[i]= StudyRisk(Participants=Participants, Age_Range=Age_Range, gender=gender, outcome='death', Pctile = P)
+    hosp_probs[i] = StudyRisk(Participants=Participants, Age_Range=Age_Range, gender=gender, outcome='hosp', Pctile = P)
   }
-  return(c(P_death=death_probs,P_hosp=hosp_probs))  
-  }
+  return(c(Death_qtile=quantile(death_probs, qtile), Hosp_qtile = quantile(hosp_probs, qtile)))
+}
+
 
 
 #SUPER inefficient! (But who cares. (Unless this takes a long time to run. OK, 20s per million is too slow.))
