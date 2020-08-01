@@ -1,10 +1,19 @@
 # RiskModel
 This is a project to model the risk of a human challenge trial, supporting a journal paper in preparation.
 
+## Contents of this repository
+
 Code in this repository is written in the [R statistical language](https://www.r-project.org/), using [RStudio projects](https://rstudio.com/) both to replicate other analyses, and (planned) to simulate IFR and total risk distributions for the purpose of this paper.
+
+Workflow is as follows:
+
+1. Probabilities of death, hospitalisation, ICU severity are derived for different age brackets from French and Chinese datasets. These are located in subfolders.
+2. The derived probabilities are then saved as .csv files, such as `France_Male_p_death_` etc. in the main folder
+3. A study simulation script `Riskmodel_Alpha.R` uses the csv inputs to simulate trials and calculate risk.
 
 
 ## General Notes on sources of error
+
 The published literature is still developing rapidly.
 
 The two published papers, in Science and Lancet Inf Dis, are not necessarily reflective of current risk as treatement has been refined and IFR seems to have declines as clinical supprt proptocols have been adapted and improved. This makes them likely to be conservative. They also do not exclude comorbidities, which would be screened out in a HCT.
