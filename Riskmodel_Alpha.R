@@ -2,7 +2,7 @@
 #
 # This file will preprocess the IFR / Hopitalized fits from other papers, then simulate.
 
-# Study / Analysis Characteristics:
+# Study / Analysis Characteristics: (Set in function)
 Age_Range = '20 to 29'
 Pctile = '95%'
 Participants = 35
@@ -15,7 +15,12 @@ Participants = 35
 # This will be the code to preprocess inputs.
 
 # Ideally, structure the data into a single dataframe to pull numbers from.
+# The final version will need to create a combined posterior estimate over multiple studies.
 
+# We will also need to correct for lack of cormorbidities based on studies with that information.
+
+
+# For now, use the France study as our basis for estimates.
 # Load data from files.
 
 Male_probDeath <- read.csv("France_Male_p_death_by_age_range.csv", row.names=1, check.names=FALSE)
@@ -73,18 +78,18 @@ StudyRisk = function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender=
     }
     }
 
-  risk_none = 1
+  prob_none = 1
   for(riskamt in groups){
-   risk_none = ((1-riskamt)^(Participants/length(groups)))
+    prob_none = ((1-riskamt)^(Participants/length(groups)))
   }
-  Risk_of_One_or_More = 1-risk_none
+  Risk_of_One_or_More = 1-prob_none
   return(Risk_of_One_or_More)
   }
 
-#Assumes that per-gender and per-age percentiles are perfectly correlated, i.e. we pick a single random number for the full study for each simulation across all ages and genders.
+#Assumes that per-gender and per-age percentiles are perfectly correlated, i.e. we pick a single random number for the full study for each simulation across all ages and genders. We then pick the 95th percentile of these.
 
 Simulate_StudyRisks = function(Simulations = 1000, Participants=1, Age_Range='20 to 29', gender='f',qtile=c(0.95)){
-  P_per_sim = runif(Simulations, min=0, max=100)
+  P_per_sim = runif(Simulations, min=0, max=100) #Pick percentiles from the overall population risk estimate to simulate
   death_probs=c()
   hosp_probs=c()
   for(i in 1:Simulations){
@@ -97,7 +102,7 @@ Simulate_StudyRisks = function(Simulations = 1000, Participants=1, Age_Range='20
 
 
 
-#SUPER inefficient! (But who cares. (Unless this takes a long time to run. OK, 20s per million is too slow.))
+#SUPER inefficient! (This takes a long time to run. 20 seconds per million is too slow.)
 Simulate_Studies =  function(Simulations = 1000, Participants=15, Age_Range='20 to 29', gender='f', weights='Even'){
   if(gender=='b'){
     subgroups_g = c('m','f') 
