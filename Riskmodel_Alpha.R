@@ -38,29 +38,39 @@ Female_probICU <- read.csv("France_Female_p_death_by_age_range.csv", row.names=1
 
 # Note: we are estimating risks from intentional infections. Our 95% assurance level is 1-directional, i.e. we are 95% certain the risk is under this level.
 
-IndivRiskPull = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death'){
+IndivRiskPull = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', Therapy=0){
   if (gender=='f'){
     if(outcome=='death'){
-      individual_risk = Female_probDeath[Age_Range,Pctile]
+      individual_risk = Female_probDeath[Age_Range,Pctile]*(1-Therapy)
     } else{
       if(outcome=='hosp'){
-        individual_risk = Female_probHosp[Age_Range,Pctile]
+        individual_risk = Female_probHosp[Age_Range,Pctile]*(1-Therapy)
       }
     }} else{
       if (gender=='m'){
         if(outcome=='death'){
-          individual_risk = Male_probDeath[Age_Range,Pctile]
+          individual_risk = Male_probDeath[Age_Range,Pctile]*(1-Therapy)
         } else{
           if(outcome=='hosp'){
-            individual_risk = Male_probHosp[Age_Range,Pctile]
+            individual_risk = Male_probHosp[Age_Range,Pctile]*(1-Therapy)
           }
-        }}
+        }} else{
+          if (gender=='b'){
+            if(outcome=='death'){
+              individual_risk = (Male_probDeath[Age_Range,Pctile] + Female_probDeath[Age_Range,Pctile])*(1-Therapy)/2
+            } else{
+              if(outcome=='hosp'){
+                individual_risk = (Male_probHosp[Age_Range,Pctile] + Female_probHosp[Age_Range,Pctile])*(1-Therapy)/2
+              }
+            }}
+        }
     }
   return(individual_risk)
-  }
+}
+
 
 #Always assumes evenly weighted group sizes across groups.
-StudyRisk = function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death'){
+StudyRisk = function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', Therapy=0){
   if(gender=='b'){
     subgroups_g = c('m','f') 
   } else {
@@ -74,7 +84,7 @@ StudyRisk = function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender=
   groups = c()
   for(age in subgroups_a){
     for(gend in subgroups_g){
-      groups[length(groups)+1] = IndivRiskPull(Age_Range=age, Pctile=Pctile, gender=gend, outcome=outcome)
+      groups[length(groups)+1] = IndivRiskPull(Age_Range=age, Pctile=Pctile, gender=gend, outcome=outcome, Therapy=Therapy)
     }
     }
 
@@ -88,14 +98,14 @@ StudyRisk = function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender=
 
 #Assumes that per-gender and per-age percentiles are perfectly correlated, i.e. we pick a single random number for the full study for each simulation across all ages and genders. We then pick the 95th percentile of these.
 
-Simulate_StudyRisks = function(Simulations = 1000, Participants=1, Age_Range='20 to 29', gender='f',qtile=c(0.95)){
+Simulate_StudyRisks = function(Simulations = 1000, Participants=1, Age_Range='20 to 29', gender='f',Therapy = 0, qtile=c(0.95)){
   P_per_sim = runif(Simulations, min=0, max=100) #Pick percentiles from the overall population risk estimate to simulate
   death_probs=c()
   hosp_probs=c()
   for(i in 1:Simulations){
     P=paste0(as.character(round(P_per_sim[i])),"%")
-    death_probs[i]= StudyRisk(Participants=Participants, Age_Range=Age_Range, gender=gender, outcome='death', Pctile = P)
-    hosp_probs[i] = StudyRisk(Participants=Participants, Age_Range=Age_Range, gender=gender, outcome='hosp', Pctile = P)
+    death_probs[i]= StudyRisk(Participants=Participants, Age_Range=Age_Range, gender=gender, outcome='death', Therapy=Therapy, Pctile = P)
+    hosp_probs[i] = StudyRisk(Participants=Participants, Age_Range=Age_Range, gender=gender, outcome='hosp', Therapy=Therapy, Pctile = P)
   }
   return(c(Death_qtile=quantile(death_probs, qtile), Hosp_qtile = quantile(hosp_probs, qtile)))
 }
@@ -103,7 +113,7 @@ Simulate_StudyRisks = function(Simulations = 1000, Participants=1, Age_Range='20
 
 
 #SUPER inefficient! (This takes a long time to run. 20 seconds per million is too slow.)
-Simulate_Studies =  function(Simulations = 1000, Participants=15, Age_Range='20 to 29', gender='f', weights='Even'){
+Simulate_Studies =  function(Simulations = 1000, Participants=15, Age_Range='20 to 29', gender='f', Therapy=0, weights='Even'){
   if(gender=='b'){
     subgroups_g = c('m','f') 
   } else {
@@ -125,8 +135,8 @@ Simulate_Studies =  function(Simulations = 1000, Participants=15, Age_Range='20 
     hospitalizations = 0
     deaths = 0
     for(p in 1:Participants){
-      d=IndivRiskPull(Age_Range=ageranges[p], Pctile=P, gender=genders[p], outcome='death')
-      h=IndivRiskPull(Age_Range=ageranges[p], Pctile=P, gender=genders[p], outcome='hosp')
+      d=IndivRiskPull(Age_Range=ageranges[p], Pctile=P, gender=genders[p], Therapy=Therapy, outcome='death')
+      h=IndivRiskPull(Age_Range=ageranges[p], Pctile=P, gender=genders[p], Therapy=Therapy, outcome='hosp')
       if(outcome_probs[p]<d){deaths = deaths+1} else if(outcome_probs[p]<h){hospitalizations = hospitalizations+1}
     }
   outcomes[i,]=c(hospitalizations, deaths)
