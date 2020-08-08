@@ -7,8 +7,8 @@ Code in this repository is written in the [R statistical language](https://www.r
 
 Workflow is as follows:
 
-1. Probabilities of death, hospitalisation, ICU severity are derived for different age brackets from French and Chinese datasets. These are located in subfolders.
-2. The derived probabilities are then saved as .csv files, such as `France_Male_p_death_` etc. in the main folder
+1. Probabilities of death, hospitalisation, ICU severity are derived for different age brackets from French and Chinese datasets. These are located in subfolders. There is an analysis script in R, which calls on [Stan](https://mc-stan.org/).
+2. The derived probabilities (from Stan) are then saved as .csv files, such as `France_Male_p_death_` etc. in the main folder
 3. A study simulation script `Riskmodel_Alpha.R` uses the csv inputs to simulate trials and calculate risk.
 
 
