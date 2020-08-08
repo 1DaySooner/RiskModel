@@ -127,22 +127,74 @@ fitprobICUOverallF<-t(apply(chains$probICUByAgeF,2,quantile,probs=c(0.025,0.25,0
 fitprobDeathOverallM<-t(apply(chains$probDeathByAgeM,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
 fitprobDeathOverallF<-t(apply(chains$probDeathByAgeF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
 
+
+### Probability of hosp given infection
+fitprobHospM<-t(apply(chains$probHospM,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
+fitprobHospF<-t(apply(chains$probHospF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
+fitRELprobHosp<-t(apply(chains$probHospM/chains$probHospF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
+
+tmpF<-(sweep(chains$probHospF,2,wts.infec[,1]/(wts.infec[,1]+wts.infec[,2]),"*"))
+tmpM<-(sweep(chains$probHospM,2,wts.infec[,2]/(wts.infec[,1]+wts.infec[,2]),"*"))
+tmp<-tmpF+tmpM
+fitprobHosp<-t(apply(tmp,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
+
+tmpF<-(sweep(chains$probHospF,2,wts.infec[,1],"*"))
+tmpM<-(sweep(chains$probHospM,2,wts.infec[,2],"*"))
+tmp<-rowSums(tmpM)+rowSums(tmpF)
+meanHospGivenInfected<-quantile(tmp,probs=c(0.025,0.25,0.5,0.75,0.975))
+meanHospGivenInfectedF<-quantile(rowSums(sweep(chains$probHospF,2,wts.infec[,1]/sum(wts.infec[,1]),"*")),probs=c(0.025,0.25,0.5,0.75,0.975))
+meanHospGivenInfectedM<-quantile(rowSums(sweep(chains$probHospM,2,wts.infec[,2]/sum(wts.infec[,2]),"*")),probs=c(0.025,0.25,0.5,0.75,0.975))
+
+
+## Probability of ICU given infection
+fitprobICUByAgeGivenInfectedM<-t(apply(chains$probICUByAgeGivenInfectionM,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
+fitprobICUByAgeGivenInfectedF<-t(apply(chains$probICUByAgeGivenInfectionF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
+fitRELprobICUByAgeGivenInfected<-t(apply(chains$probICUByAgeGivenInfectionM/chains$probICUByAgeGivenInfectionF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
+tmpF<-(sweep(chains$probICUByAgeGivenInfectionF,2,wts.infec[,1]/(wts.infec[,1]+wts.infec[,2]),"*"))
+tmpM<-(sweep(chains$probICUByAgeGivenInfectionM,2,wts.infec[,2]/(wts.infec[,1]+wts.infec[,2]),"*"))
+tmp<-tmpF+tmpM
+fitprobICUByAgeGivenInfected<-t(apply(tmp,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
+
+tmpF<-(sweep(chains$probICUByAgeGivenInfectionF,2,wts.infec[,1],"*"))
+tmpM<-(sweep(chains$probICUByAgeGivenInfectionM,2,wts.infec[,2],"*"))
+tmp<-rowSums(tmpM)+rowSums(tmpF)
+meanICUGivenInfected<-quantile(tmp,probs=c(0.025,0.25,0.5,0.75,0.975))
+meanICUGivenInfectedF<-quantile(rowSums(sweep(chains$probICUByAgeGivenInfectionF,2,wts.infec[,1]/sum(wts.infec[,1]),"*")),probs=c(0.025,0.25,0.5,0.75,0.975))
+meanICUGivenInfectedM<-quantile(rowSums(sweep(chains$probICUByAgeGivenInfectionM,2,wts.infec[,2]/sum(wts.infec[,2]),"*")),probs=c(0.025,0.25,0.5,0.75,0.975))
+
+### Probability of Death given infection
+fitprobDeathByAgeGivenInfectedM<-t(apply(chains$probDeathByAgeGivenInfectionM,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
+fitprobDeathByAgeGivenInfectedF<-t(apply(chains$probDeathByAgeGivenInfectionF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
+fitRELprobDeathByAgeGivenInfected<-t(apply(chains$probDeathByAgeGivenInfectionM/chains$probDeathByAgeGivenInfectionF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
+tmpF<-(sweep(chains$probDeathByAgeGivenInfectionF,2,wts.infec[,1]/(wts.infec[,1]+wts.infec[,2]),"*"))
+tmpM<-(sweep(chains$probDeathByAgeGivenInfectionM,2,wts.infec[,2]/(wts.infec[,1]+wts.infec[,2]),"*"))
+tmp<-tmpF+tmpM
+fitprobDeathByAgeGivenInfected<-t(apply(tmp,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
+
+tmpF<-(sweep(chains$probDeathByAgeGivenInfectionF,2,wts.infec[,1],"*"))
+tmpM<-(sweep(chains$probDeathByAgeGivenInfectionM,2,wts.infec[,2],"*"))
+tmp<-rowSums(tmpM)+rowSums(tmpF)
+meanDeathGivenInfected<-quantile(tmp,probs=c(0.025,0.25,0.5,0.75,0.975))
+meanDeathGivenInfectedF<-quantile(rowSums(sweep(chains$probDeathByAgeGivenInfectionF,2,wts.infec[,1]/sum(wts.infec[,1]),"*")),probs=c(0.025,0.25,0.5,0.75,0.975))
+meanDeathGivenInfectedM<-quantile(rowSums(sweep(chains$probDeathByAgeGivenInfectionM,2,wts.infec[,2]/sum(wts.infec[,2]),"*")),probs=c(0.025,0.25,0.5,0.75,0.975))
+
+
 # Added more granular extract:
 
-Male_probDeath<-t(apply(chains$probDeathByAgeM,2,quantile,probs=(0:100)/100,na.rm=T))
-Female_probDeath<-t(apply(chains$probDeathByAgeF,2,quantile,probs=(0:100)/100,na.rm=T))
+Male_probDeath<-t(apply(chains$probDeathByAgeGivenInfectionM,2,quantile,probs=(0:100)/100,na.rm=T))
+Female_probDeath<-t(apply(chains$probDeathByAgeGivenInfectionF,2,quantile,probs=(0:100)/100,na.rm=T))
 
-Male_probHosp<-t(apply(chains$probHospByAgeM,2,quantile,probs=(0:100)/100,na.rm=T))
-Female_probHosp<-t(apply(chains$probHospByAgeF,2,quantile,probs=(0:100)/100,na.rm=T))
+Male_probHosp<-t(apply(chains$probHospM,2,quantile,probs=(0:100)/100,na.rm=T))
+Female_probHosp<-t(apply(chains$probHospF,2,quantile,probs=(0:100)/100,na.rm=T))
 
-Male_probICU<-t(apply(chains$probICUByAgeM,2,quantile,probs=(0:100)/100,na.rm=T))
-Female_probICU<-t(apply(chains$probICUByAgeF,2,quantile,probs=(0:100)/100,na.rm=T))
+Male_probICU<-t(apply(chains$probICUByAgeGivenInfectionM,2,quantile,probs=(0:100)/100,na.rm=T))
+Female_probICU<-t(apply(chains$probICUByAgeGivenInfectionF,2,quantile,probs=(0:100)/100,na.rm=T))
 
 
 rowlabel = list()
 for (i in 1:length(agesLower)){
   rowlabel[i] = paste(toString(agesLower[i]), "to", toString(agesUpper[i]))
-  }
+}
 
 rownames(Male_probDeath) <- rowlabel
 rownames(Female_probDeath) <- rowlabel
@@ -161,58 +213,6 @@ write.csv(Female_probICU,"../France_Female_p_death_by_age_range.csv")
 
 
 
-# Commented out because not relevant to IFR paper:
-# 
-# ### Probability of hosp given infection
-# fitprobHospM<-t(apply(chains$probHospM,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
-# fitprobHospF<-t(apply(chains$probHospF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
-# fitRELprobHosp<-t(apply(chains$probHospM/chains$probHospF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
-# 
-# tmpF<-(sweep(chains$probHospF,2,wts.infec[,1]/(wts.infec[,1]+wts.infec[,2]),"*"))
-# tmpM<-(sweep(chains$probHospM,2,wts.infec[,2]/(wts.infec[,1]+wts.infec[,2]),"*"))
-# tmp<-tmpF+tmpM
-# fitprobHosp<-t(apply(tmp,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
-# 
-# tmpF<-(sweep(chains$probHospF,2,wts.infec[,1],"*"))
-# tmpM<-(sweep(chains$probHospM,2,wts.infec[,2],"*"))
-# tmp<-rowSums(tmpM)+rowSums(tmpF)
-# meanHospGivenInfected<-quantile(tmp,probs=c(0.025,0.25,0.5,0.75,0.975)) 
-# meanHospGivenInfectedF<-quantile(rowSums(sweep(chains$probHospF,2,wts.infec[,1]/sum(wts.infec[,1]),"*")),probs=c(0.025,0.25,0.5,0.75,0.975)) 
-# meanHospGivenInfectedM<-quantile(rowSums(sweep(chains$probHospM,2,wts.infec[,2]/sum(wts.infec[,2]),"*")),probs=c(0.025,0.25,0.5,0.75,0.975)) 
-# 
-# 
-# ### Probability of ICU given infection
-# fitprobICUByAgeGivenInfectedM<-t(apply(chains$probICUByAgeGivenInfectionM,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
-# fitprobICUByAgeGivenInfectedF<-t(apply(chains$probICUByAgeGivenInfectionF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
-# fitRELprobICUByAgeGivenInfected<-t(apply(chains$probICUByAgeGivenInfectionM/chains$probICUByAgeGivenInfectionF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
-# tmpF<-(sweep(chains$probICUByAgeGivenInfectionF,2,wts.infec[,1]/(wts.infec[,1]+wts.infec[,2]),"*"))
-# tmpM<-(sweep(chains$probICUByAgeGivenInfectionM,2,wts.infec[,2]/(wts.infec[,1]+wts.infec[,2]),"*"))
-# tmp<-tmpF+tmpM
-# fitprobICUByAgeGivenInfected<-t(apply(tmp,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
-# 
-# tmpF<-(sweep(chains$probICUByAgeGivenInfectionF,2,wts.infec[,1],"*"))
-# tmpM<-(sweep(chains$probICUByAgeGivenInfectionM,2,wts.infec[,2],"*"))
-# tmp<-rowSums(tmpM)+rowSums(tmpF)
-# meanICUGivenInfected<-quantile(tmp,probs=c(0.025,0.25,0.5,0.75,0.975))
-# meanICUGivenInfectedF<-quantile(rowSums(sweep(chains$probICUByAgeGivenInfectionF,2,wts.infec[,1]/sum(wts.infec[,1]),"*")),probs=c(0.025,0.25,0.5,0.75,0.975)) 
-# meanICUGivenInfectedM<-quantile(rowSums(sweep(chains$probICUByAgeGivenInfectionM,2,wts.infec[,2]/sum(wts.infec[,2]),"*")),probs=c(0.025,0.25,0.5,0.75,0.975)) 
-# 
-# ### Probability of Death given infection
-# fitprobDeathByAgeGivenInfectedM<-t(apply(chains$probDeathByAgeGivenInfectionM,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
-# fitprobDeathByAgeGivenInfectedF<-t(apply(chains$probDeathByAgeGivenInfectionF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
-# fitRELprobDeathByAgeGivenInfected<-t(apply(chains$probDeathByAgeGivenInfectionM/chains$probDeathByAgeGivenInfectionF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
-# tmpF<-(sweep(chains$probDeathByAgeGivenInfectionF,2,wts.infec[,1]/(wts.infec[,1]+wts.infec[,2]),"*"))
-# tmpM<-(sweep(chains$probDeathByAgeGivenInfectionM,2,wts.infec[,2]/(wts.infec[,1]+wts.infec[,2]),"*"))
-# tmp<-tmpF+tmpM
-# fitprobDeathByAgeGivenInfected<-t(apply(tmp,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
-# 
-# tmpF<-(sweep(chains$probDeathByAgeGivenInfectionF,2,wts.infec[,1],"*"))
-# tmpM<-(sweep(chains$probDeathByAgeGivenInfectionM,2,wts.infec[,2],"*"))
-# tmp<-rowSums(tmpM)+rowSums(tmpF)
-# meanDeathGivenInfected<-quantile(tmp,probs=c(0.025,0.25,0.5,0.75,0.975)) 
-# meanDeathGivenInfectedF<-quantile(rowSums(sweep(chains$probDeathByAgeGivenInfectionF,2,wts.infec[,1]/sum(wts.infec[,1]),"*")),probs=c(0.025,0.25,0.5,0.75,0.975)) 
-# meanDeathGivenInfectedM<-quantile(rowSums(sweep(chains$probDeathByAgeGivenInfectionM,2,wts.infec[,2]/sum(wts.infec[,2]),"*")),probs=c(0.025,0.25,0.5,0.75,0.975)) 
-# 
 # ### Probability of ICU given hosp
 # fitprobICUByAgeGivenHospM<-t(apply(chains$probICUM,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
 # fitprobICUByAgeGivenHospF<-t(apply(chains$probICUF,2,quantile,probs=c(0.025,0.25,0.5,0.75,0.975),na.rm=T))
