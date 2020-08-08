@@ -1,0 +1,288 @@
+---
+title: "Bayesian model for COVID IFR"
+author: "Witold Wiecek for 1 Day Sooner"
+date: "Last updated `r Sys.Date()`"
+output: pdf_document
+bibliography: bibliography.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(baggr)
+library(tidyverse)
+library(readxl)
+```
+
+This is a short document describing a Bayesian model for synthesising information on many infection fatality rates (IFRs) into a single estimate. The analysis is a form of Bayesian meta-analysis, in that our primary objective is to weigh sources of evidence in a way that captures both variability (heterogeneity across different settings) and uncertainty.
+
+Our final objective is to predict risks (especially of death) in a particular setting, population and time. Therefore, as a minimum, we want to incorporate variability into our prediction. Even better would be to understand how different factors can drive heterogeneity. Indeed, _a priori_, we can hypothesise that the three main drivers of differences in IFRs are  time-specific, population-specific and otherwise country-specific. 
+
+
+
+## Heterogeneity sources (WIP)
+
+* We get better over time at treating
+* New treatments available
+* Selection pressures may lead to more benign versions of the virus 
+* Country-specific under-reporting
+* Underlying distributions of known risk factors may differ
+    + ... (list here)
+* Unknown risk factors (e.g. genetic) may be operating
+* Access to health care differs from population to population
+* Average dose at transmission will be population-specific
+
+(I can provide sources for all of these, but this is more of a paper write-up.)
+
+
+
+## Bayesian model for evidence synthesis
+
+What follows is an adaptation of typical methods of Bayesian evidence synthesis to analysis of IFRs. IFR is a proportion statistic, calculated as the ratio of deaths to infections in some population. Early estimates place it at over 0.6% globally, but the risk of death is orders of magnitude higher in particular high risk groups, especially in the elderly, than in healthy adults or children.
+
+We can use Bayesian models for repeated binary trials, accounting for the fact that different populations studies at different times have different average probability of events. We use hierarchical modelling framework to assume that the context-specific estimates of $IFR_i$ (measured in different settings, with some uncertainty) are all linked using some common parameters.
+
+There are two straight-forward and canonical ways to implement such Bayesian model. The first works with $IFR_i$ parameters and treats them as derived from Beta distribution with some "hyperparameters" $\alpha$ and $\beta$ of Beta distribution, as done by e.g. @carpenter_hierarchical_2016. 
+Alternatively, we can use a model of log odds, which operates not on the proportions of events but on their log odds, see @deeks_issues_2002 for a general treatment. (Note, however, that for very rare events the odds of mortality are very similar to probability of mortality.) The advantage of this model is that it can use either individual-level of summary data and work with covariates (such as gender, age, time of the study, co-morbidities), captured as odds ratios or risk ratios^[If only summary data are available, covariates can be defined as study level distributions (e.g. % male)]. 
+
+
+$$
+\log \frac{IFR_i}{1-IFR_i} = \text{logit}(IFR_i)
+$$
+
+Basic models of this type can be implemented using existing statistical analysis packages. Here, we use _baggr_  by @wiecek_baggr_2020 as it automates parts of Bayesian aggregation model building and uses Stan as a back-end. 
+
+
+```{r, include = F}
+# Several different datasets.
+NBER_IFR_Benchmark_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xlsx',1)
+#Places: Belgium. Geneva, Indiana, New York, Spain, Sweden
+NBER_IFR_US_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xlsx',2, skip=1)
+names(NBER_IFR_US_Studies)[6:7]<-c('Infect 95_lower','Infect 95_upper')
+names(NBER_IFR_US_Studies)[10:11]<-c('IFR_95_lower','IFR_95_upper')
+```
+
+```{r}
+ifr_global <- NBER_IFR_Benchmark_Studies %>%
+  group_by(Study) %>%
+  summarise(
+    deaths = sum(Deaths),
+    infections = sum(Population*InfectionRate/100),
+    infections_l = sum(Population*infrate_ci95_low/100),
+    infections_h = sum(Population*infrate_ci95_high/100)) %>%
+  mutate(ifr   = deaths/infections,
+         ifr_l = deaths/infections_l,
+         ifr_u = deaths/infections_h,
+         dataset = "World")
+
+ifr_us <- NBER_IFR_US_Studies %>%
+  filter(!is.na(AgeGroup)) %>%
+  rename(InfectionRate = `Infection Rate (%)`) %>%
+  rename(infrate_ci95_low = `Infect 95_lower`) %>%
+  rename(infrate_ci95_high = `Infect 95_upper`) %>%
+  group_by(Study) %>%
+  summarise(
+    deaths = sum(Deaths),
+    infections = sum(Population*InfectionRate/100),
+    infections_l = sum(Population*infrate_ci95_low/100),
+    infections_h = sum(Population*infrate_ci95_high/100)) %>%
+  mutate(ifr   = deaths/infections,
+         ifr_l = deaths/infections_l,
+         ifr_u = deaths/infections_h,
+         dataset = "United States")
+```
+
+
+## Model data
+
+We use estimates collected by @levin_assessing_2020 to construct the first version of analysis dataset. First, we calculate overall IFR in the population by collecting deaths and infections across all reported age groups^[This basic approach exaggerates uncertainty, as we treat different 95% intervals reported in the study as uncorrelated.].
+
+```{r skew, fig.caption = "Available data on IFR collected by @levin_assessing_2020. Interval is 95% CI reported in the paper. Extra points correspond to the intervals recreated by assuming Gaussian distribution on log odds."}
+logit <- function(p) log(p/(1-p))
+inv.logit <- function(p) exp(p)/(1+exp(p))
+
+#At p this low we might just as well work with log, TBD
+# But note the right-skewed intervals
+rbind(ifr_us, ifr_global) %>%
+  mutate(midpoint_l = logit(ifr) - (logit(ifr_u) - logit(ifr_l))/2) %>%
+  mutate(midpoint_u = logit(ifr) + (logit(ifr_u) - logit(ifr_l))/2) %>%
+  ggplot(aes(x=ifr, xmax = ifr_u, xmin=ifr_l, y=Study, color = dataset)) + 
+  geom_point() + geom_errorbarh() +
+  geom_point(aes(x = inv.logit(midpoint_l)), pch = 21) +
+  geom_point(aes(x = inv.logit(midpoint_u)), pch = 21) +
+  theme(legend.position = "none")
+
+# Log p or logit p will work fine, but something is off for the US
+
+# Let's try to analyse with log p only
+ifr_log <- rbind(ifr_us, ifr_global) %>%
+  mutate(tau = log(ifr)) %>%
+  mutate(se  = (log(ifr_l) - log(ifr_u))/(2*1.96))
+
+```
+We label the collected estimates as $IFR_i$. The corresponding standard errors (after the logit transform) are $se_i$.
+
+
+
+## Results for analysis of overall IFRs
+
+```{r baggr-ifr-model, include = F, cache = T}
+bg <- baggr(ifr_log, group = "Study")
+bgc <- baggr_compare(ifr_log, group = "Study", transform = inv.logit)
+# Don't really need to formally compare, but to be thorough
+loo1 <- loocv(ifr_log, pooling = "partial")
+loo2 <- loocv(ifr_log, pooling = "full")
+```
+
+The model is  
+
+\begin{equation}
+\text{logit}(\hat{IFR_i}) \sim \mathcal{N}(\theta_i, se_i) \\ 
+\end{equation}
+
+\begin{equation}
+\theta_i  \sim \mathcal{N}(\tau, \sigma)
+\end{equation}
+
+
+where $\theta_i$ is the real value of underlying logit of IFR in study $i$. We assume $\tau \sim \mathcal{N}(0, 100)$, $\sigma \sim \mathcal{N}(0, 100)$ and $se_i$'s are treated as known parameters, derived from the assumption of logit-normality of IFR's. 
+
+We fit two models, one with partial pooling (assumptions as above) and one with full pooling (fixing $\sigma = 0$). We also show no pooling estimates for comparison.
+
+```{r, fig.caption = "Comparison of full (red), partial (blue) and no (green) pooling models of IFR fit in baggr."}
+# print(bg, exponent = T)
+plot(bgc) + labs(title = "", x = "mean IFR (95% uncertainty interval)")
+# print(bgc)
+```
+
+
+We can conduct a formal comparison of full vs partial pooling to confirm that there is a considerable heterogeneity and that partial pooling is preferred, but this should be obvious from the plots.
+
+```{r}
+loo_compare(loo1, loo2)
+```
+
+A summary of the partially pooled model (we use exp transform rather than inv logit for technical reasons, __will be fixed__)
+
+```{r}
+print(bg, exponent = TRUE)
+```
+
+Basic pooling metric (1 - I^2) for the partially pooled model suggests low pooling:
+
+```{r}
+heterogeneity(bg)[,,1]
+```
+
+In conclusion, the pooled IFR in general population in the included studies is as follows:
+
+```{r}
+round(treatment_effect(bg, summary = T, transform = inv.logit)$tau, 4)
+```
+
+We can also summarise this as a forest plot:
+
+```{r}
+forest_plot(bg)
+```
+
+
+## Model with age-specific IFRs
+
+We can modify the above model to include some covariates. A basic structure could include study setting and age of participants. For simplicity we start with median age variable (__to be refined__). If only summary data are used, this model can be written as a modification of the previous one, where
+
+$$
+\theta_i = \alpha_i + \beta (age_i - 2.5) + \gamma study_i
+$$
+
+where $age$ is median age in the study (in decades). We center age at 25 years of age, so that the main estimate is for the 20-29 age group. Variable $study$ is a location indicator (we use Belgium as reference). This simplistic model assumes that each extra decade of life has the same impact in terms of _odds ratios_ of dying. (__This can be modified in the future.__) The rest of the model is the same as the previous one.
+
+Data for this model is the same dataset, but without merging of IFRs across age groups:
+
+```{r, fig.caption = "Available data on IFR collected by @levin_assessing_2020, broken down by median ages. Interval is 95% CI reported in the paper. Extra points correspond to the intervals recreated by assuming Gaussian distribution on log odds."}
+
+# Step 2: IFR analysis but with age variable (naive) 
+ifr_global <- NBER_IFR_Benchmark_Studies %>%
+  group_by(Study) %>%
+  mutate(ifr = IFR/100, ifr_l = ifr_ci95_low/100, ifr_u = ifr_ci95_high/100) %>%
+  select(Study, AgeGroup, Median_Age, ifr, ifr_l, ifr_u) %>%
+  mutate(dataset = "United States")
+
+# Bad:
+# ifr_us <- NBER_IFR_US_Studies %>%
+#   filter(!is.na(AgeGroup)) %>%
+#   mutate(ifr = `IFR (%)`/100) %>%
+#   # mutate(ifr_l = `IFR_95_lower`/100) %>%
+#   # mutate(ifr_u = `IFR_95_upper`/100) %>%
+#   select(Study, AgeGroup, Median_Age, ifr, ifr_l, ifr_u) %>%
+#   mutate(dataset = "United States")
+
+# rbind(ifr_global) %>%
+#   mutate(agegr = cut(Median_Age, c(0, 20, 40, 65, Inf))) %>%
+#   mutate(midpoint_l = log(ifr) - (log(ifr_l) - log(ifr_u))/2) %>%
+#   mutate(midpoint_u = log(ifr) + (log(ifr_l) - log(ifr_u))/2) %>%
+#   ggplot(aes(y=ifr, ymax = ifr_u, ymin=ifr_l, x=Study, color = Median_Age)) + 
+#   geom_point(position = position_dodge(width = .5)) + 
+#   geom_errorbar(position = position_dodge(width = .5)) +
+#   # geom_point(aes(x = exp(midpoint_l)), pch = 21) +
+#   # geom_point(aes(x = exp(midpoint_u)), pch = 21) +
+#   coord_flip() +
+#   facet_wrap(~agegr, scales = "free")
+
+rbind(ifr_global) %>%
+  mutate(agegr = cut(Median_Age, c(0, 20, 40, 65, Inf))) %>%
+  mutate(midpoint_l = log(ifr) - (log(ifr_u) - log(ifr_l))/2) %>%
+  mutate(midpoint_u = log(ifr) + (log(ifr_u) - log(ifr_l))/2) %>%
+  ggplot(aes(x=ifr, xmax = ifr_u, xmin=ifr_l, y=interaction(Study, AgeGroup))) + 
+  geom_point() + geom_errorbarh() +
+  geom_point(aes(x = exp(midpoint_l)), pch = 21) +
+  geom_point(aes(x = exp(midpoint_u)), pch = 21) +
+  facet_wrap(~agegr, scales = "free")
+```
+
+
+```{r}
+ifr_log <- rbind(ifr_global) %>%
+  mutate(ifr_l = ifelse(Study == "Geneva" && AgeGroup == "0-19", 3.2e-07, ifr_l)) %>%
+  mutate(tau = log(ifr)) %>%
+  mutate(se  = (log(ifr_u) - log(ifr_l))/(2*1.96)) %>%
+  ungroup() %>%
+  mutate(group = interaction(Study, AgeGroup),
+         Median_Age = Median_Age/10 - 2.5,
+         country = factor(Study, 
+                        levels = c("Belgium", "Geneva", "Indiana", "New York", "Spain", "Sweden"),
+                        labels = c("BE", "Ge", "In", "Ny", "ES", "SE")))
+```
+
+
+```{r baggr-model-age, include = F, cache = T}
+ifr_test <- as.data.frame(model.matrix(data = ifr_log, 
+                                       ifr ~ tau + se + Median_Age + country)) %>%
+  mutate(group = ifr_log$group)
+bg_n2 <- baggr(ifr_test, pooling = "none")
+bg <- baggr(ifr_test, 
+            covariates = c("Median_Age", "countryGe", "countryIn", "countryNy", "countryES", "countrySE"))
+# loo1 <- loocv(ifr_log, pooling = "partial")
+# loo2 <- loocv(ifr_log, pooling = "full")
+```
+
+The results are as follows (__will be fixed to inv logit__):
+
+```{r}
+# fixed_effects(bg, summary = TRUE)
+# random_effects(bg, summary = T)
+# plot(bg, transform = inv.logit) + scale_x_log10()
+# print(bg)
+print(bg, exponent = T)
+# print(bgc)
+```
+
+By explaining part of the variation with location- and age-specific covariates, we can also see how the partially pooled estimates are narrower than their non-pooled estimates
+
+```{r}
+bgc <- baggr_compare(bg_n2, bg, transform = inv.logit)
+plot(bgc) + scale_y_log10() + labs(y = "mean IFR (95% uncertainty interval)")
+# Don't really need to formally compare, but to be thorough
+```
+
+
+# References
