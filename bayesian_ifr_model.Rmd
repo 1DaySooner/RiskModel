@@ -13,43 +13,36 @@ library(tidyverse)
 library(readxl)
 ```
 
-This is a short document describing a Bayesian model for synthesising information on many infection fatality rates (IFRs) into a single estimate. The analysis is a form of Bayesian meta-analysis, in that our primary objective is to weigh sources of evidence in a way that captures both variability (heterogeneity across different settings) and uncertainty.
+# Introduction
 
-Our final objective is to predict risks (especially of death) in a particular setting, population and time. Therefore, as a minimum, we want to incorporate variability into our prediction. Even better would be to understand how different factors can drive heterogeneity. Indeed, _a priori_, we can hypothesise that the three main drivers of differences in IFRs are  time-specific, population-specific and otherwise country-specific. 
+This is a short document describing a Bayesian model for synthesising information on many infection fatality rates (IFRs) into a single estimate that can be made specific to certain age groups or adjusted by co-morbidity status. The analysis presented here is a form of Bayesian meta-analysis, in that our primary objective is to weigh sources of evidence in a way that captures both variability (heterogeneity across different settings) and uncertainty.
 
+Our ultimate objective is to characterise risks in a particular setting, population and time, in a way that is useful to understanding risks of human challenge trials (HCTs). Therefore, as a minimum, we want to incorporate variability into our prediction. Even better would be to understand how different factors can drive heterogeneity. Indeed, _a priori_, we can hypothesise that the three main drivers of differences in IFRs are time-specific, population-specific and otherwise country-specific. 
 
+The role of time may be due to new treatments, improvements over time in our ability to treat Covid-19 or selection pressures which may lead to more benign versions of the virus.
+Country-specific or location-specific factors in IFR data may be driven by under-reporting, health care factors (including access to health care services) or underlying distributions of known risk factors. Additionally, some unknown risk factors (e.g. genetic) may also be operating, in which case controlling for age and co-moribidities will be not sufficient to account for cross-location differences. 
 
-## Heterogeneity sources (WIP)
-
-* We get better over time at treating
-* New treatments available
-* Selection pressures may lead to more benign versions of the virus 
-* Country-specific under-reporting
-* Underlying distributions of known risk factors may differ
-    + ... (list here)
-* Unknown risk factors (e.g. genetic) may be operating
-* Access to health care differs from population to population
-* Average dose at transmission will be population-specific
-
-(I can provide sources for all of these, but this is more of a paper write-up.)
+To address these drivers of differences in observed IFRs we develop a Bayesian model and apply it to publicaly available summary data on IFRs from multiple countries and contexts, with particular focus on the impact of age.
 
 
+
+# Methods
 
 ## Bayesian model for evidence synthesis
 
-What follows is an adaptation of typical methods of Bayesian evidence synthesis to analysis of IFRs. IFR is a proportion statistic, calculated as the ratio of deaths to infections in some population. Early estimates place it at over 0.6% globally, but the risk of death is orders of magnitude higher in particular high risk groups, especially in the elderly, than in healthy adults or children.
+What follows is an adaptation of typical methods of Bayesian evidence synthesis to analysis of IFRs. IFR is a proportion statistic, calculated as the ratio of deaths to infections in some population. Early estimates, e.g. by @verity_estimates_2020, place it at over 0.6% globally. However, the risk of death is orders of magnitude higher in particular high risk groups, especially in the elderly, than in the general population.
 
 We can use Bayesian models for repeated binary trials, accounting for the fact that different populations studies at different times have different average probability of events. We use hierarchical modelling framework to assume that the context-specific estimates of $IFR_i$ (measured in different settings, with some uncertainty) are all linked using some common parameters.
 
-There are two straight-forward and canonical ways to implement such Bayesian model. The first works with $IFR_i$ parameters and treats them as derived from Beta distribution with some "hyperparameters" $\alpha$ and $\beta$ of Beta distribution, as done by e.g. @carpenter_hierarchical_2016. 
-Alternatively, we can use a model of log odds, which operates not on the proportions of events but on their log odds, see @deeks_issues_2002 for a general treatment. (Note, however, that for very rare events the odds of mortality are very similar to probability of mortality.) The advantage of this model is that it can use either individual-level of summary data and work with covariates (such as gender, age, time of the study, co-morbidities), captured as odds ratios or risk ratios^[If only summary data are available, covariates can be defined as study level distributions (e.g. % male)]. 
+The most straight-forward and "canonical" ways to implement such a Bayesian model is by modelling log odds of the event.^[It is also possible to work with $IFR_i$ parameters and treat them as derived from Beta distribution with some "hyperparameters" $\alpha$ and $\beta$ of Beta distribution, as done by e.g. @carpenter_hierarchical_2016.]
+@deeks_issues_2002 present a general treatment. Note, that for very rare events the odds of mortality are very similar to probability of mortality, but we model events on odds scale as a good "generic" approach to modelling binary data (in this case death following infections). Another advantage of such a model is that it can use either individual-level or summary data and work with covariates (such as gender, age, time of the study, co-morbidities), captured as odds ratios or risk ratios^[If only summary data are available, covariates can be defined as study level distributions (e.g. % male)]. 
 
 
 $$
 \log \frac{IFR_i}{1-IFR_i} = \text{logit}(IFR_i)
 $$
 
-Basic models of this type can be implemented using existing statistical analysis packages. Here, we use _baggr_  by @wiecek_baggr_2020 as it automates parts of Bayesian aggregation model building and uses Stan as a back-end. 
+Basic models for analysis of binary datacan be implemented using existing statistical analysis packages. Here, we use _baggr_  by @wiecek_baggr_2020 as it automates parts of Bayesian aggregation model building and uses Stan as a back-end. 
 
 
 ```{r, include = F}
