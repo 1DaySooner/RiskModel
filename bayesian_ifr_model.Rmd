@@ -52,6 +52,8 @@ NBER_IFR_Benchmark_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Datas
 NBER_IFR_US_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xlsx',2, skip=1)
 names(NBER_IFR_US_Studies)[6:7]<-c('Infect 95_lower','Infect 95_upper')
 names(NBER_IFR_US_Studies)[10:11]<-c('IFR_95_lower','IFR_95_upper')
+
+NBER_All_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xls',5)
 ```
 
 ```{r}
@@ -82,6 +84,19 @@ ifr_us <- NBER_IFR_US_Studies %>%
          ifr_l = deaths/infections_l,
          ifr_u = deaths/infections_h,
          dataset = "United States")
+
+ifr_all_withage <- NBER_All_Studies %>%
+  filter(infrate_ci95_low>0) %>%
+  group_by(Study,Median_Age) %>%
+  summarise(
+    deaths = sum(Deaths),
+    infections = sum(Population*InfectionRate/100),
+    infections_l = sum(Population*infrate_ci95_low/100),
+    infections_h = sum(Population*infrate_ci95_high/100)) %>%
+  mutate(ifr   = deaths/infections,
+         ifr_l = deaths/infections_l,
+         ifr_u = deaths/infections_h,
+         dataset = "All")
 ```
 
 
@@ -104,12 +119,36 @@ rbind(ifr_us, ifr_global) %>%
   geom_point(aes(x = inv.logit(midpoint_u)), pch = 21) +
   theme(legend.position = "none")
 
-# Log p or logit p will work fine, but something is off for the US
-
 # Let's try to analyse with log p only
 ifr_log <- rbind(ifr_us, ifr_global) %>%
   mutate(tau = log(ifr)) %>%
   mutate(se  = (log(ifr_l) - log(ifr_u))/(2*1.96))
+
+#Fix estimate above 100% - (TODO: Figure out what to do!)
+ifr_all_withage$ifr_l[which(ifr_all_withage$ifr_l>1.0)]=0.999
+# "Fix" for zero values to check.
+#ifr_all_withage$ifr_l[which(ifr_all_withage$ifr==0)]=1.0e-6
+#ifr_all_withage$ifr_u[which(ifr_all_withage$ifr==0)]=1.0e-6
+#ifr_all_withage$ifr[which(ifr_all_withage$ifr==0)]=1.0e-6
+
+
+rbind(ifr_all_withage) %>%
+  mutate(midpoint_l = logit(ifr) - (logit(ifr_u) - logit(ifr_l))/2) %>%
+  mutate(midpoint_u = logit(ifr) + (logit(ifr_u) - logit(ifr_l))/2) %>%
+  ggplot(aes(x=ifr, xmax = ifr_u, xmin=ifr_l, y=Study, age=Median_Age, color = Median_Age)) +  # Color by age group instead of source
+  geom_point() + geom_errorbarh() +
+  geom_point(aes(x = inv.logit(midpoint_l)), pch = 21) +
+  geom_point(aes(x = inv.logit(midpoint_u)), pch = 21) +
+  scale_colour_gradient(low = "green", high = "red",limits = c(10,90.5), breaks = c(20,45,65,85), labels = c(20,45,65,85)) + # Color by age
+  scale_x_continuous(trans='log2') + # Make it actually show the lower age groups. This induces errors for infinite values
+  theme(legend.position = "right", legend.key.width=unit(.25, "cm")) # Now display legend with age
+
+ifr_withage_log <- rbind(ifr_all_withage) %>%
+  mutate(tau = log(ifr)) %>%
+  mutate(se  = (log(ifr_l) - log(ifr_u))/(2*1.96))
+
+# Log p or logit p will work fine, but something is off for the US
+
 
 ```
 We label the collected estimates as $IFR_i$. The corresponding standard errors (after the logit transform) are $se_i$.
@@ -124,6 +163,9 @@ bgc <- baggr_compare(ifr_log, group = "Study", transform = inv.logit)
 # Don't really need to formally compare, but to be thorough
 loo1 <- loocv(ifr_log, pooling = "partial")
 loo2 <- loocv(ifr_log, pooling = "full")
+
+bg_withage_log <- baggr(ifr_all_withage, group = "Study",covariates=="Median_Age")
+
 ```
 
 The model is  
@@ -143,7 +185,7 @@ We fit two models, one with partial pooling (assumptions as above) and one with 
 
 ```{r, fig.caption = "Comparison of full (red), partial (blue) and no (green) pooling models of IFR fit in baggr."}
 # print(bg, exponent = T)
-plot(bgc) + labs(title = "", x = "mean IFR (95% uncertainty interval)")
+plot(bgc, title = "", xlabel = "mean IFR (95% uncertainty interval)")
 # print(bgc)
 ```
 
@@ -221,14 +263,23 @@ ifr_global <- NBER_IFR_Benchmark_Studies %>%
 #   coord_flip() +
 #   facet_wrap(~agegr, scales = "free")
 
+fmt_dcimals <- function(decimals=0){
+   # return a function responpsible for formatting the 
+   # axis labels with a given number of decimals 
+   function(x) as.character(round(x,decimals))
+}
+
 rbind(ifr_global) %>%
   mutate(agegr = cut(Median_Age, c(0, 20, 40, 65, Inf))) %>%
   mutate(midpoint_l = log(ifr) - (log(ifr_u) - log(ifr_l))/2) %>%
   mutate(midpoint_u = log(ifr) + (log(ifr_u) - log(ifr_l))/2) %>%
-  ggplot(aes(x=ifr, xmax = ifr_u, xmin=ifr_l, y=interaction(Study, AgeGroup))) + 
+  #mutate(S_name = fct_reorder(Study, Study))  %>% #Try to get these to display in order by name. Can't manage it!
+  ggplot(aes(x=ifr, xmax = ifr_u, xmin=ifr_l, y=interaction(Study, AgeGroup, lex.order = TRUE), color=Study)) + #Color studies instead.
   geom_point() + geom_errorbarh() +
   geom_point(aes(x = exp(midpoint_l)), pch = 21) +
   geom_point(aes(x = exp(midpoint_u)), pch = 21) +
+  scale_x_continuous(name="IFR", limits=c(0.000001, 1), trans='log2', labels=fmt_dcimals(5)) +
+  scale_y_discrete(limits = rev) + #Order is working now! 
   facet_wrap(~agegr, scales = "free")
 ```
 
