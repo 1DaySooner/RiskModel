@@ -32,13 +32,30 @@ names(NBER_IFR_US_Studies)[10:11]<-c('IFR_95_lower','IFR_95_upper')
 logit <- function(x) log(x/(1-x))
 inv_logit <- function(x) exp(x)/(1+exp(x))
 
+ifr_global <- NBER_IFR_Benchmark_Studies %>%
+  group_by(Study) %>%
+  mutate(ir = InfectionRate/100, 
+         ir_low = infrate_ci95_low/100, 
+         ir_high = infrate_ci95_high/100) %>%
+  select(Study, AgeGroup, Median_Age, Deaths, Population, ir, ir_low, ir_high) %>%
+  mutate(dataset = "Global")
+
+ifr_us <- NBER_IFR_US_Studies %>%
+  filter(!is.na(AgeGroup)) %>%
+  group_by(Study) %>%
+  mutate(ir = `Infection Rate (%)`/100, 
+         ir_low = `Infect 95_lower`/100, 
+         ir_high = `Infect 95_upper`/100) %>%
+  select(Study, AgeGroup, Median_Age, Deaths, Population, ir, ir_low, ir_high) %>%
+  mutate(dataset = "United States")
+
 rbind(ifr_global, ifr_us) %>%
   mutate(log_sd = ifelse(ir_low != 0, 
-                         (logit(ir_high/100) - logit(ir_low/100))/(2*1.96), 
-                         (logit(ir_high/100) - logit(ir/100))/1.96)) %>%
-  mutate(log_mean = logit(ir/100)) %>%
+                         (logit(ir_high) - logit(ir_low))/(2*1.96), 
+                         (logit(ir_high) - logit(ir))/1.96)) %>%
+  mutate(log_mean = logit(ir)) %>%
   mutate(midpoint_u = log_mean + log_sd*1.96, midpoint_l = log_mean - log_sd*1.96) %>%
-  ggplot(aes(x=ir/100, xmax = ir_high/100, xmin=ir_low/100, y=interaction(Study, AgeGroup))) + 
+  ggplot(aes(x=ir, xmax = ir_high, xmin=ir_low, y=interaction(Study, AgeGroup))) + 
   geom_point() + geom_errorbarh() +
   geom_point(aes(x = inv_logit(midpoint_l)), pch = 21) +
   geom_point(aes(x = inv_logit(midpoint_u)), pch = 21)
@@ -47,9 +64,9 @@ rbind(ifr_global, ifr_us) %>%
 
 df <- rbind(ifr_global, ifr_us) %>%
   mutate(logit_sd = ifelse(ir_low != 0, 
-                         (logit(ir_high/100) - logit(ir_low/100))/(2*1.96), 
-                         (logit(ir_high/100) - logit(ir/100))/1.96)) %>%
-  mutate(logit_mean = logit(ir/100))
+                         (logit(ir_high) - logit(ir_low))/(2*1.96), 
+                         (logit(ir_high) - logit(ir))/1.96)) %>%
+  mutate(logit_mean = logit(ir))
 
 mm <- model.matrix(ir ~ Study + Median_Age, data = df)
 stan_data <- list(
