@@ -11,6 +11,12 @@ knitr::opts_chunk$set(echo = FALSE)
 library(baggr)
 library(tidyverse)
 library(readxl)
+
+# Stan stuff:
+library(rstan)
+rstan_options(auto_write = TRUE)
+sm <- stan_model("ifr_with0.stan")
+options(mc.cores = 4)
 ```
 
 # Introduction
@@ -41,10 +47,11 @@ Basic models for analysis of binary data can be implemented using existing stati
 
 Let $d_k$ denote observed deaths for data point $k$ and assume that logit of prevalence $p_k$ in the population of $n_k$ subjects is obtained from some model. We can then write:
 
-$$
-d_k \sim \text{Binomial}(n_k, p_kIFR_k) \\
-\text{logit}(p_k) \sim \mathcal{N}(\mu^{(p)}_k, \sigma^{(p)}_k)
-$$
+\begin{align}
+d_k & \sim \text{Binomial}(n_k, p_kIFR_k) \\
+\text{logit}(p_k) & \sim \mathcal{N}(\mu^{(p)}_k, \sigma^{(p)}_k)
+\end{align}
+
 where $\sigma^{(p)}_k$ and $\mu^{(p)}_k$ are parameters derived from the existing models of prevalence.
 
 The $k$ data points collected can span many locations (studies); we denote them by $\text{loc}_k$ and the total number of locations by $N_{loc}$
@@ -56,11 +63,12 @@ $$
 $$
 where $\theta$ is an $N_{loc}$-dimensional vector of location-specific (random) effects on IFR and $\beta$ is $N_p$ dimensional vector of (fixed) covariate effects.
 
-We implement our model in Stan and assume mildly regularising priors on all parameters:
+We implement our model in Stan and assume very weakly informative priors on all parameters:
 
 ```
 model {
   //Likelihood:
+  // logit_ifr = theta_k[loc] + to_vector(X*beta);
   logit_prevalence ~ normal(mean_prevalence, sd_prevalence);
   obs_deaths ~ binomial(population, prevalence .* ifr);
   theta_k ~ normal(tau, sigma);
@@ -115,7 +123,7 @@ ifr_us <- NBER_IFR_US_Studies %>%
   mutate(dataset = "United States")
 ```
 
-```{r prevalence-data, fig.cap = "Distribution of model-estimated prevalences (95% CI's reported by modelling studies) collected by @levin_assessing_2020. Additional points show 95% CIs recreated by assuming logit-normal distribution of prevalence."}
+```{r prevalence-data, fig.cap = "Distribution of model-estimated prevalences (95% CI's reported by modelling studies) collected by @levin_assessing_2020. Additional points show 95% CIs recreated by assuming logit-normal distribution of prevalence.", fig.height = 9.5, fig.width = 6}
 rbind(ifr_global, ifr_us) %>%
   mutate(log_sd = ifelse(ir_low != 0, 
                          (logit(ir_high) - logit(ir_low))/(2*1.96), 
@@ -125,13 +133,12 @@ rbind(ifr_global, ifr_us) %>%
   ggplot(aes(x=ir, xmax = ir_high, xmin=ir_low, y=interaction(Study, AgeGroup))) + 
   geom_point() + geom_errorbarh() +
   geom_point(aes(x = inv_logit(midpoint_l)), pch = 21) +
-  geom_point(aes(x = inv_logit(midpoint_u)), pch = 21)
+  geom_point(aes(x = inv_logit(midpoint_u)), pch = 21) +
+  xlab("Infection rate (95% interval)") + ylab("")
 
 ```
 
 ```{r}
-
-
 df <- rbind(ifr_global, ifr_us) %>%
   mutate(logit_sd = ifelse(ir_low != 0, 
                          (logit(ir_high) - logit(ir_low))/(2*1.96), 
@@ -151,13 +158,6 @@ stan_data <- list(
   obs_deaths = df$Deaths)
 ```
 
-
-```{r}
-library(rstan)
-rstan_options(auto_write = TRUE)
-sm <- stan_model("ifr_with0.stan")
-options(mc.cores = 4)
-```
 
 ```{r, cache = TRUE}
 fit <- sampling(sm, data = stan_data, control = list(max_treedepth = 15))

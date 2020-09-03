@@ -26,7 +26,7 @@ NBER_IFR_US_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xlsx
 names(NBER_IFR_US_Studies)[6:7]<-c('Infect 95_lower','Infect 95_upper')
 names(NBER_IFR_US_Studies)[10:11]<-c('IFR_95_lower','IFR_95_upper')
 
-# NBER_All_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xls',5)
+NBER_All_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xls',5)
 ```
 
 ```{r}
@@ -58,18 +58,18 @@ ifr_us <- NBER_IFR_US_Studies %>%
          ifr_u = deaths/infections_h,
          dataset = "United States")
 
-# ifr_all_withage <- NBER_All_Studies %>%
-#   filter(infrate_ci95_low>0) %>%
-#   group_by(Study,Median_Age) %>%
-#   summarise(
-#     deaths = sum(Deaths),
-#     infections = sum(Population*InfectionRate/100),
-#     infections_l = sum(Population*infrate_ci95_low/100),
-#     infections_h = sum(Population*infrate_ci95_high/100)) %>%
-#   mutate(ifr   = deaths/infections,
-#          ifr_l = deaths/infections_l,
-#          ifr_u = deaths/infections_h,
-#          dataset = "All")
+ifr_all_withage <- NBER_All_Studies %>%
+  filter(infrate_ci95_low>0) %>%
+  group_by(Study,Median_Age) %>%
+  summarise(
+    deaths = sum(Deaths),
+    infections = sum(Population*InfectionRate/100),
+    infections_l = sum(Population*infrate_ci95_low/100),
+    infections_h = sum(Population*infrate_ci95_high/100)) %>%
+  mutate(ifr   = deaths/infections,
+         ifr_l = deaths/infections_l,
+         ifr_u = deaths/infections_h,
+         dataset = "All")
 ```
 
 
