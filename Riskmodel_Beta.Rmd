@@ -1,0 +1,281 @@
+---
+title: "HCT Dashboard Beta"
+author: "Ben Choi"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    source_code: embed
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+library(ggplot2)
+library(shiny) # I see that it says runtime:Shiny, but without this line I get errors.
+library(scales)
+library(tidyverse)
+library(flexdashboard)
+source("Riskmodel_Alpha.R")
+
+
+# Function Definitions (from Shiny_Alpha.R)
+
+micromortify <- function(Micromorts){
+  mm_names <- c("Driving from NYC to Los Angeles in a motorcycle", "Living Kidney Donation, (https://cjasn.asnjournals.org/content/14/4/597)", "Woman giving birth", "Woman giving birth twice", "Serving in the army Afganistan in 2009 for one week","Serving in the army Afganistan in 2009 for two weeks","Driving from NYC to Los Angeles and back in a motorcycle","Trucking for 1 year", "Logging for 1 year")
+  mm_values <- c(465, 300, 120,240,336,672,930,280,737)
+  closest_answer <- (abs(mm_values - Micromorts) == min(abs(mm_values - Micromorts)))
+  output_list <- list(name = mm_names[closest_answer], num = mm_values[closest_answer])
+}
+
+basicFormatter <- function(Number, Mode='Pct') {
+  if (Mode == 'Pct') {
+    return(
+      paste0(
+        prettyNum(Number * 100, digits = 3, format = "g", drop0trailing = TRUE), "%")
+    )
+  }
+}
+```
+
+Inputs {.sidebar}
+=======================================================================
+
+```{r}
+# Make the sliders
+
+sliderInput(
+  inputId = 'num_participants', 
+  label = 'Number of Trial Participants', 
+  min = 10, 
+  max = 100,
+  value = 15,
+  step = 1
+)
+
+sliderInput(
+  inputId = 'p_treatment', 
+  label = 'Potentially Available Treatment', 
+  min = 0, 
+  max = 0.9,
+  value = 0,
+  step = 0.05
+)
+
+selectInput(
+  'gender', 
+  'Gender of Participants', 
+  choices = c("Male" = "m", "Female" = "f", "Both (Equal Number)" = "b"),
+  selected = "b"
+)
+
+selectInput(
+  'ages', 
+  'Ages of Participants', 
+  c("20 to 29", "20 to 39"), 
+  selected = "20 to 29"
+)
+```
+
+<!-- Notice the ====== vs. -------. These just change how the page is divided up into sections vs. rows -->
+
+Dashboard
+=======================================================================
+
+Row
+-----------------------------------------------------------------------
+
+### Expected Risk of Mortality {.value-box}
+
+```{r}
+
+# defines a reactive "function" called outcome_mean. When you want the up to date value, just call outcome_mean() and it'll give you whatever Simulate_StudyRisks returns. It knows where Simulate_StudyRisks is because of the  source("Riskmodel_Alpha.R") line we put at the top of the page.
+outcome_mean <-
+  reactive(
+    Simulate_StudyRisks(
+      Participants = input$num_participants,
+      Age_Range = input$ages,
+      gender = input$gender,
+      Therapy = input$p_treatment,
+      qtile = c(0.5)
+    )
+  )
+
+# this is where we call the actual reactive "function". There are different kinds of renders, such as renderValueBox, renderPlot, etc. Just Google them to see how to use them/what they look like
+
+#bonus, you might consider adding icons, or having color change dynamically as the value changes (e.g. red for high risk, green for low risk). This can also be easily googled.
+renderValueBox({
+  out_mean <- basicFormatter(outcome_mean()[1])
+  valueBox(
+    value = out_mean,
+    # icon = "icon_name"
+    color = muted("red")
+  )
+})
+```
+
+### 95% Confidence Risk of Mortality {.value-box}
+
+```{r}
+outcome_95 <-
+  reactive(
+    Simulate_StudyRisks(
+      Participants = input$num_participants,
+      Age_Range = input$ages,
+      gender = input$gender,
+      Therapy = input$p_treatment)
+  )
+
+renderValueBox({
+  risk <- basicFormatter(outcome_95()[1])
+  valueBox(
+    value = risk
+  )
+})
+```
+
+### Micromorts {.value-box}
+
+```{r}
+micromorts <-
+  reactive(
+    round(
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = input$gender,
+        outcome = 'death',
+        Therapy = input$p_treatment, Pctile = "50%"
+      ) * 1000000
+    )
+  )
+
+renderValueBox({
+  mm <- micromorts()
+  valueBox(
+    value = mm
+  )
+})
+```
+
+Row
+-----------------------------------------------------------------------
+
+### Activity with Comparable Risk
+
+```{r}
+
+mm_ify = reactive(micromortify(micromorts()))
+
+renderValueBox({
+  mm_name <- mm_ify()$name
+  valueBox(
+    value = mm_name
+  )
+})
+```
+
+Row {.tabset}
+-----------------------------------------------------------------------
+
+### % Risk
+
+```{r}
+renderPlot({
+  out_95_percent <- 
+    tribble(
+      ~out_95, ~status,
+      outcome_95()[1], "Death",
+      outcome_95()[2], "Hospitalized",
+    )
+  
+  out_expected <- 
+    tribble(
+      ~out_mean, ~status,
+      outcome_mean()[1], "Death",
+      outcome_mean()[2], "Hospitalized",
+    )
+  
+  # the code below might look weird but it's just vanilla ggplot2. https://dcl-data-vis.stanford.edu/ggplot2-basics.html is a decent start, https://r4ds.had.co.nz/data-visualisation.html is also a great resource!!
+  out_95_percent %>% 
+    ggplot(aes(status, out_95)) +
+    geom_col(position = "dodge", fill = "steelblue") +
+    geom_errorbar(
+      aes(y = out_mean, ymin = out_mean, ymax = out_mean), 
+      color = 'black',
+      size = 2,
+      data = out_expected
+    ) +
+    scale_y_continuous(labels = scales::label_percent(scale = 10), breaks = scales::breaks_pretty(7)) +
+    labs(
+      title = "Risk by Outcome",
+      subtitle = "95% probability that actual value is in blue shaded region, black line is expected value",
+      x = NULL,
+      y = "% Risk",
+      color = "Expected"
+    ) +
+    theme_minimal()
+})
+```
+
+### Micromorts
+
+```{r}
+m_micromorts <-
+  reactive(
+    round(
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = 'm',
+        outcome = 'death',
+        Therapy = input$p_treatment, Pctile = "50%"
+      ) * 1000000
+    )
+  )
+
+f_micromorts <-
+  reactive(
+    round(
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = 'f',
+        outcome = 'death',
+        Therapy = input$p_treatment, Pctile = "50%"
+      ) * 1000000
+    )
+  )
+
+b_micromorts <-
+  reactive(
+    round(
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = 'b',
+        outcome = 'death',
+        Therapy = input$p_treatment, Pctile = "50%"
+      ) * 1000000
+    )
+  )
+
+renderPlot({
+  mm <-
+    tribble(
+      ~gender, ~micromorts,
+      "Male", m_micromorts(),
+      "Female", f_micromorts(),
+      "Both", b_micromorts()
+    )
+  mm %>%
+    ggplot(aes(fct_reorder(gender, gender, .desc = TRUE), micromorts)) +
+    geom_col() +
+    labs(
+      title = "Micromorts by Gender",
+      x = NULL,
+      y = "Micromorts"
+    ) +
+    theme_minimal()
+})
+```
+
+About Model
+=======================================================================
+
+Here would be a good place to put your detailed model outcome descriptions + methodology and link your GitHub/website. Try not to clutter the main dashboard with text probably.
+
