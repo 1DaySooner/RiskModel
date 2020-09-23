@@ -267,7 +267,8 @@ renderPlot({
       "Giving birth", 60, "Other",
       "Soldier in Afganistan \n in 2009 for 1 week", 336, "Other",
       "Trucking for 1 year", 280, "Other",
-      "Logging for 1 year", 737, "Other"
+      "Logging for 1 year", 737, "Other",
+      "Liver Donation \n (left lobe)", 1000, "Other"
     )
   mm %>%
     ggplot(aes(fct_reorder(activity, micromorts, .desc = FALSE), micromorts, fill=col)) +
