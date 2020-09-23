@@ -10,6 +10,7 @@ runtime: shiny
 
 ```{r global, include=FALSE}
 library(ggplot2)
+library(shiny) # I see that it says runtime:Shiny, but without this line I get errors.
 library(scales)
 library(tidyverse)
 library(flexdashboard)
