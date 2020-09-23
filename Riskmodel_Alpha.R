@@ -39,6 +39,7 @@ Female_probICU <- read.csv("France_Female_p_death_by_age_range.csv", row.names=1
 # Note: we are estimating risks from intentional infections. Our 95% assurance level is 1-directional, i.e. we are 95% certain the risk is under this level.
 
 IndivRiskPull = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', Therapy=0){
+  individual_risk <- 55
   if (gender=='f'){
     if(outcome=='death'){
       individual_risk = Female_probDeath[Age_Range,Pctile]*(1-Therapy)
@@ -67,6 +68,51 @@ IndivRiskPull = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome
     }
   return(individual_risk)
 }
+
+## Alternative Version
+## In general should try to use lookup table generated with map + dplyr instead of if/for
+
+# therapy_values <- tibble(therapy = seq(0, 0.9, 0.1))
+# participants <- 10:100
+# 
+# all_probs <- 
+#   list(
+#     "m_death" = Male_probDeath, 
+#     "f_death" = Female_probDeath,
+#     "m_hosp" = Male_probHosp, 
+#     "f_hosp" = Female_probHosp
+#   )
+# 
+# generate_lookup <- function(df, name) {
+#   df %>% 
+#     rownames_to_column(var = "age_group") %>% 
+#     pivot_longer(
+#       cols = -age_group,
+#       names_to = "percentile",
+#       values_to = "probability"
+#     ) %>% 
+#     mutate(name) %>% 
+#     separate(name, into = c("gender", "outcome"), "_")
+# }
+# 
+# lookup <- 
+#   all_probs %>% 
+#   map2_dfr(.x = ., .y = names(.), generate_lookup) %>% 
+#   expand_grid(therapy_values) %>% 
+#   mutate(risk = probability * (1 - therapy))
+# 
+# lookup <- 
+#   lookup %>% 
+#   select(-probability) %>% 
+#   rbind(
+#     lookup %>% 
+#       group_by(age_group, percentile, outcome, therapy) %>% 
+#       summarize(
+#         gender = "b",
+#         risk = mean(risk)
+#       ) %>% 
+#       ungroup()    
+#   )
 
 
 #Always assumes evenly weighted group sizes across groups.
