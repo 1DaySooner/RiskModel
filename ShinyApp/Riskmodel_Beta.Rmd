@@ -1,11 +1,13 @@
 ---
 title: "HCT Dashboard Beta"
 author: "Ben Choi"
-output: 
+output:
   flexdashboard::flex_dashboard:
     orientation: rows
     source_code: embed
 runtime: shiny
+resource_files:
+- Riskmodel_Beta.html
 ---
 
 ```{r global, include=FALSE}
@@ -20,7 +22,7 @@ source("Riskmodel_Alpha.R")
 # Function Definitions (from Shiny_Alpha.R)
 
 micromortify <- function(Micromorts){
-  mm_names <- c("Driving from NYC to Los Angeles in a motorcycle", "Living Kidney Donation, (https://cjasn.asnjournals.org/content/14/4/597)", "Woman giving birth", "Woman giving birth twice", "Serving in the army Afganistan in 2009 for one week","Serving in the army Afganistan in 2009 for two weeks","Driving from NYC to Los Angeles and back in a motorcycle","Trucking for 1 year", "Logging for 1 year")
+  mm_names <- c("Driving from NYC to Los Angeles in a motorcycle", "Living Kidney Donation, (https://cjasn.asnjournals.org/content/14/4/597)", "Woman giving birth", "Woman giving birth twice", "Serving in the army in Afganistan in 2009 for one week","Serving in the army Afganistan in 2009 for two weeks","Driving from NYC to Los Angeles and back in a motorcycle","Trucking for 1 year", "Logging for 1 year")
   mm_values <- c(465, 300, 120,240,336,672,930,280,737)
   closest_answer <- (abs(mm_values - Micromorts) == min(abs(mm_values - Micromorts)))
   output_list <- list(name = mm_names[closest_answer], num = mm_values[closest_answer])
@@ -83,7 +85,7 @@ Dashboard
 Row
 -----------------------------------------------------------------------
 
-### Expected Risk of Mortality {.value-box}
+### Probability of any Deaths {.value-box}
 
 ```{r}
 
@@ -112,7 +114,7 @@ renderValueBox({
 })
 ```
 
-### 95% Confidence Risk of Mortality {.value-box}
+### 95% Confidence, No Deaths {.value-box}
 
 ```{r}
 outcome_95 <-
@@ -257,13 +259,18 @@ b_micromorts <-
 renderPlot({
   mm <-
     tribble(
-      ~gender, ~micromorts,
-      "Male", m_micromorts(),
-      "Female", f_micromorts(),
-      "Both", b_micromorts()
+      ~activity, ~micromorts, ~col,
+      "HCT Volunteer (Male)", m_micromorts(), "Participate",
+      "HCT Volunteer (Female)", f_micromorts(), "Participate",
+      "Motorcycle Trip \n from NYC to LA", 465, "Other",
+      "Living Kidney Donation",300, "Other",
+      "Giving birth", 60, "Other",
+      "Soldier in Afganistan \n in 2009 for 1 week", 336, "Other",
+      "Trucking for 1 year", 280, "Other",
+      "Logging for 1 year", 737, "Other"
     )
   mm %>%
-    ggplot(aes(fct_reorder(gender, gender, .desc = TRUE), micromorts)) +
+    ggplot(aes(fct_reorder(activity, micromorts, .desc = FALSE), micromorts, fill=col)) +
     geom_col() +
     labs(
       title = "Micromorts by Gender",
