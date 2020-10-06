@@ -80,9 +80,12 @@ DoseResponse = function(Dose, Risk){ #Returns a value in (0,1) for the new risk.
 
 #Always assumes evenly weighted group sizes across groups.
 StudyRisk <- function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', Therapy=0, average=TRUE){
+  if (length(outcome)>1){
+    warning("Too many outcomes here.")
+  }
   Indiv_Risk = IndivRisk(Age_Range, Pctile, gender, outcome, Therapy)
   risks = unlist(Indiv_Risk['value'])
-  groups = dim(Indiv_Risk)[1]
+  groups = dim(Indiv_Risk)[1] #Only if it's only 1 outcome...
   if(average){ #Number of people per group is equal, despite fractional people.
     group_sizes = rep(Participants/groups,groups)
   } else { #Generate groups.
