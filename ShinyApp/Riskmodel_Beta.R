@@ -57,6 +57,8 @@ row.names(all_probs) <- NULL
 all_probs = as.data.frame(all_probs)
 
 # Data is together. Now pulling is easy!
+require(dplyr)
+
 
 IndivRisk = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', Therapy=0){
   if (gender == 'b'){gender = c('m','f')}
@@ -74,38 +76,59 @@ IndivRiskPull = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome
 # To be done.
 DoseResponse = function(Dose, Risk){ #Returns a value in (0,1) for the new risk. This can be customized.
   # Doses are likely concentrations of 10^4, 10^5, 10^6, and/or 10^7.
-  # The Risk is the population level risk of impact. 
-  
+  # The Risk is the population level risk of a given impact. 
+  return(Risk)
 }
 
-#Always assumes evenly weighted group sizes across groups.
-StudyRisk <- function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', Therapy=0, average=TRUE){
-  if (length(outcome)>1){
-    warning("Too many outcomes here.")
-  }
+# Generally, we can define a study as a set of doses a dose response function, for each group of people. 
+# The current version has a constant response, but the above function will allow this to vary.
+
+# Studies should also allow for contingent groups. That needs to be implemented.
+
+# Let's define a study as a list.
+Study_Definition_Example = list(Groups=list(list(Risk=0.001, Count=5,Dose=10), list(Risk=.005, Count=7, Dose=100)), DR_function = function(Dose, Risk){return(Risk)})
+# This doesn't allow for conditionals, etc. 
+# TODO: Implement conditional branches.
+
+# Given a list of things about a study, we want to create that study definition.
+
+Make_Study <- function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', Therapy=0, dose=0, simulate=FALSE){
   Indiv_Risk = IndivRisk(Age_Range, Pctile, gender, outcome, Therapy)
-  risks = unlist(Indiv_Risk['value'])
-  groups = dim(Indiv_Risk)[1] #Only if it's only 1 outcome...
-  if(average){ #Number of people per group is equal, despite fractional people.
-    group_sizes = rep(Participants/groups,groups)
-  } else { #Generate groups.
+  groups = dim(Indiv_Risk)[1]
+  if (simulate == TRUE){
+    warning("Simulation is not yet fully implemented for Make_Study.")
     simplex = runif(groups,0,Participants) #But this doesn't sum correctly
     group_sizes = round(simplex*Participants/sum(simplex),0)
     while (sum(group_sizes) < Participants){
       add_to = sample(1:groups)[1]
       group_sizes[add_to] = group_sizes[add_to] + 1
       # print("Added")
-    }
+      }
     while (sum(group_sizes) > Participants){
       take_from = sample(1:groups)[1]
       if (group_sizes[take_from]>0){group_sizes[take_from] = group_sizes[take_from] - 1}
       # print("Subtracted")
+      }
+    } 
+  else {
+    group_sizes = rep(Participants/groups,groups)
+    Study = list(Groups=list(), DR_function = function(...){return(1)})
+    for (i in 1:dim(Indiv_Risk)[1]){
+      Study$Groups[[i]] = list(Risk=Indiv_Risk[i,'value'], Count=group_sizes[i], Dose=dose)
+      }
+    return(Study)
     }
   }
+
+StudyRisk <- function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', Therapy=0, average=TRUE){
+  if (length(outcome)>1){
+    warning("Too many outcomes here.")
+  }
+  Study_Characteristics = Make_Study(Participants, Age_Range, Pctile, gender, outcome, Therapy)
   
   prob_none = 1
-  for(i in 1:groups){
-    prob_none = prob_none*((1-risks[i])^(group_sizes[i]))
+  for(i in 1:length(Study_Characteristics$Groups)){
+    prob_none = prob_none*((1-Study_Characteristics$Groups[[i]]$Risk)^(Study_Characteristics$Groups[[i]]$Count))
   }
   Risk_of_One_or_More = 1-prob_none
   return(Risk_of_One_or_More)
