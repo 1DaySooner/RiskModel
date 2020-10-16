@@ -37,8 +37,8 @@ model {
   theta_k ~ normal(tau, sigma);
 
   //Priors (WIP):
-  tau   ~ normal(0, 10);
-  sigma ~ normal(0, 10);
+  tau   ~ normal(logit(.0001), 5);
+  sigma ~ normal(0, 5);
   beta  ~ normal(0, 10);
 }
 
