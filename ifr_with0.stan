@@ -38,7 +38,7 @@ model {
 
   //Priors (WIP):
   tau   ~ normal(logit(.0001), 5);
-  sigma ~ normal(0, 5);
+  sigma ~ normal(0, 10);
   beta  ~ normal(0, 10);
 }
 

@@ -1,0 +1,12 @@
+name: HCTRiskModelBeta
+title: HCTRiskModelBeta
+username:
+account: davidmanheim
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2867602
+bundleId: 3660921
+url: https://davidmanheim.shinyapps.io/HCTRiskModelBeta/
+when: 1600851038.56135
+asMultiple: FALSE
+asStatic: FALSE

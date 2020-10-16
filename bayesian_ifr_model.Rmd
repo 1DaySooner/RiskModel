@@ -11,12 +11,11 @@ knitr::opts_chunk$set(echo = FALSE)
 library(baggr)
 library(tidyverse)
 library(readxl)
-
 # Stan stuff:
 library(rstan)
 rstan_options(auto_write = TRUE)
 sm <- stan_model("ifr_with0.stan")
-options(mc.cores = 4)
+options(mc.cores = 4, digits = 2)
 ```
 
 # Introduction
@@ -26,9 +25,9 @@ This is a short document describing a Bayesian model for synthesising informatio
 Our ultimate objective is to characterise risks in a particular setting, population and time, in a way that is useful to understanding risks of human challenge trials (HCTs). Therefore, as a minimum, we want to incorporate variability into our prediction. Even better would be to understand how different factors can drive heterogeneity. Indeed, _a priori_, we can hypothesise that the three main drivers of differences in IFRs are time-specific, population-specific and otherwise country-specific. 
 
 The role of time may be due to new treatments, improvements over time in our ability to treat Covid-19 or selection pressures which may lead to more benign versions of the virus.
-Country-specific or location-specific factors in IFR data may be driven by under-reporting, health care factors (including access to health care services) or underlying distributions of known risk factors. Additionally, some unknown risk factors (e.g. genetic) may also be operating, in which case controlling for age and co-moribidities will be not sufficient to account for cross-location differences. 
+Country-specific or location-specific factors in IFR data may be driven by under-reporting, health care factors (including access to health care services) or underlying distributions of known risk factors. Additionally, some unknown risk factors (e.g. genetic) may also be operating, in which case controlling for age and co-morbidities will be not sufficient to account for cross-location differences. 
 
-To address these drivers of differences in observed IFRs we develop a Bayesian model and apply it to publicaly available summary data on IFRs from multiple countries and contexts, with particular focus on the impact of age.
+To address these drivers of differences in observed IFRs we develop a Bayesian model and apply it to publicly available summary data on IFRs from multiple countries and contexts, with particular focus on the impact of age.
 
 
 
@@ -74,7 +73,7 @@ model {
   theta_k ~ normal(tau, sigma);
 
   //Priors:
-  tau   ~ normal(0, 10);
+  tau   ~ normal(0, 100);
   sigma ~ normal(0, 10);
   beta  ~ normal(0, 10);
 }
@@ -160,16 +159,166 @@ stan_data <- list(
 
 
 ```{r, cache = TRUE}
-fit <- sampling(sm, data = stan_data, control = list(max_treedepth = 15))
+fit <- sampling(sm, data = stan_data, control = list(max_treedepth = 15), refresh = 0)
 ```
 
 ```{r}
 print(fit, c("tau", "sigma", "beta"))
 ```
 
+## Average infection fatality risk in young subjects
+
+```{r}
+hypermean <- (rstan::extract(fit, "tau")[[1]])
+hypersd <- (rstan::extract(fit, "sigma")[[1]])
+
+hyperifr <- inv_logit(hypermean)
+replications <- inv_logit(rnorm(4000, hypermean, hypersd))
+```
+
+Since we use a transformation `MedianAge/10 - 2.5` to construct our matrix $X$, we can obtain model-estimated risk for a typical HCT population (aged 20 to 30, with median 25) by ignoring the $\beta$ coefficient and examining $\tau$ and $\sigma$ only. We find that the average IFR for this group (equal to $\frac{\exp{(\tau)}}{\exp{(1 + \tau)}}$) is `r mean(hyperifr)` (with 95% interval from `r quantile(hyperifr, .025)` to `r quantile(hyperifr, .975)`). That means slightly under 2 deaths per 10,000 infections in the studied datasets.
+
+
+## Heterogeneity in IFRs
+
+There is a considerable variability in IFRs across different locations/dataset. To take into account parameter $\sigma$, we can generate draws from the $\mathcal{N}(\tau, \sigma^2)$ distribution, corresponding to a hypothetical IFR in a new source of data. 95% interval for such model runs from `r quantile(replications, .025)` to `r quantile(replications, .975)`. Since the model works a logistic scale, another way of interpreting the across-dataset variability is asking the impact of $\sigma$ on the mean IFR; here, we obtain on average a `r mean(exp(2*hypersd))`-fold increase (decrease) in IFR per $2\sigma$ increase (decrease).
+
+The lower end of the 95% interval, `r quantile(replications, .025)`, is not extreme given input data, where the "crude" mean IFR (based on mean prevalence only) is below 7 per 10,000 for all data, except for South Florida, and as low as 1.4 per 10,000 in Utah, in population aged 19-44.
+
+```{r}
+df %>% filter(Median_Age > 10, Median_Age < 35) %>% 
+  select(Study, AgeGroup, Deaths, Population, ir) %>%
+  mutate(crude_ifr = Deaths/(Population*ir))
+```
+```{r}
+theta_mean <- summary(fit, "theta_k")$summary[,"mean"]
+names(theta_mean) <- levels(as.factor(df$Study))
+
+```
+
+We can assess this heterogeneity by inspecting the distribution of random effects in the model transformed into IFRs, 
+i.e. the inverse logit transformation $\theta$ parameters. 
+The largest (posterior mean) IFR value of $\theta$ is `r inv_logit(max(theta_mean))` in `r names(theta_mean)[which.max(theta_mean)]`.
+The smallest posterior mean is `r inv_logit(min(theta_mean))` in `r names(theta_mean)[which.min(theta_mean)]`.
+
+
+
 
 ## Predictive checks for the model
 
-...
+```{r}
+df_cov <- data.frame(study = df$Study, 
+           observed = df$Deaths,
+           summary(fit, "ppc_deaths")$summary) %>% 
+  mutate(coverage975 = (observed + .1) > X2.5. & observed < X98.) %>%
+  mutate(coverage50 = (observed + .1) > X25. & observed < X75.) %>% 
+  summarise(n = n(), coverage975 = sum(coverage975), coverage50 = sum(coverage50))
+```
+
+We constructed posterior predictive distributions for number of deaths in each of the inputs by using the `generated quantities` functionality of Stan. 
+Out of `r df_cov$n` observations that were used to fit the model, `r df_cov$coverage975` were within 95% intervals of the 
+posterior predictive distributions, with 3 discrepancies occuring in Spanish data. 
+This suggests that the simple binomial model we used here is flexible enough to capture both age-specific risk increases and differences across countries.
+
+
+Plot of the ppc 95% intervals vs observed N deaths
+
+```{r}
+data.frame(study = df$Study, 
+           age = df$AgeGroup,
+           observed = df$Deaths,
+           summary(fit, "ppc_deaths")$summary) %>% 
+  mutate_if(is.numeric, function(x) x/df$Population) %>%
+  mutate(deaths_cut = cut(observed, c(-Inf, 1/1e06, 10/1e06, 100/1e06, Inf))) %>%
+  ggplot(aes(y=interaction(study, age))) + 
+  geom_point(aes(x = mean)) + 
+  geom_errorbarh(aes(xmin = X2.5., xmax = X98.)) + 
+  geom_point(aes(x = observed), color = "red") + 
+  facet_wrap(~deaths_cut, ncol = 2, scales = "free")
+```
+
+# What is the risk in healthy individuals?
+
+
+```{r}
+open_safely <- read_excel("Study Summary Data/OpenSafely_Counts.xls")
+
+stan_df <- open_safely %>% 
+  filter(!is.na(Fatalities)) %>% 
+  mutate(f = ifelse(Fatalities == "<=5", "5", Fatalities)) %>%
+  mutate(f = as.numeric(f)) %>%
+  mutate(p = f/Population) 
+```
+
+Data for this section has been provided by OpenSAFELY (_https://opensafely.org/_) and is as described by @williamson_factors_2020 in a recent article on Covid-19 mortality risk factors for 10,926 Covid-19 deaths in England. We group the total of 21,444,863 individuals into high and low risk groups as follows:
+
+__Definition of co-morbiditiy goes here__
+
+In contrast to the cited publication, we include records of individuals under 18 in our assessment.
+
+```{r}
+
+como_df <- stan_df %>%
+  filter(`Healthy Weight` == 0) %>%
+  group_by(Age_min, `No Comorbidities`) %>%
+  summarise(p=sum(Population), f=sum(f)) %>%
+  mutate(m = f/p) 
+
+como_df %>%
+  rename(status = `No Comorbidities`) %>%
+  mutate(status = ifelse(status, 
+                                "No comorbidities", "All individuals")) %>%
+  ggplot(aes(x = Age_min + 5, y=log(m), 
+             group = status, color = status)) +
+  geom_point() +
+  geom_line() +
+    xlab("Age") + ylab("log(Pr of death)") +
+  theme(legend.position = "bottom")
+
+como_df %>%
+  select(-f, -p) %>%
+  spread(`No Comorbidities`, m) %>%
+  setNames(c("age_group_min", "all_risk", "healthy_risk")) %>%
+  mutate(rr = healthy_risk/all_risk)
+```
+
+
+
+```{r, eval = T}
+stan_df %>%
+  ggplot(aes(x = Age_min, y = log(p), color = Gender)) + geom_point() + facet_wrap(~ `No Comorbidities`)
+
+stan_data <- list(
+  N = nrow(stan_df),
+  age = ifelse(stan_df$Age_min >= 20, (stan_df$Age_min - 20)/10, 0), #experimental
+  male = 1*(stan_df$Gender == "M"),
+  comorbidities = 1*(stan_df$`No Comorbidities` == 0),
+  overweight = 1*(stan_df$`Healthy Weight` == 0),
+  under20 = 1*(stan_df$Age_min < 20),
+  Npop = stan_df$Population,
+  Nevents = stan_df$f)
+
+sm_como <- stan_model("rr_comorbidities.stan")
+```
+
+```{r, cache = TRUE}
+fit_como <- sampling(sm_como, data = stan_data, refresh = 0)
+```
+
+
+```{r}
+data.frame(
+  stan_df,
+  lci = summary(fit_como, "theta")$summary[,"2.5%"],
+  estimate = summary(fit_como, "theta")$summary[,"mean"],
+  uci = summary(fit_como, "theta")$summary[,"98%"]) %>%
+  mutate(lci = log(lci), estimate = log(estimate), uci = log(uci)) %>%
+  ggplot(aes(x = Age_min, y = log(p), color = Gender)) + 
+  geom_point(pch = 21) +
+  geom_point(aes(y = estimate), pch = 2) +
+  geom_errorbar(aes(ymin = lci, ymax = uci)) +
+  facet_grid(Healthy.Weight ~ No.Comorbidities)
+```
+
 
 # References

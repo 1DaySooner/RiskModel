@@ -1,0 +1,348 @@
+---
+title: "HCT Dashboard Beta"
+author: "Ben Choi"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    source_code: embed
+runtime: shiny
+resource_files:
+- Riskmodel_Beta.html
+---
+
+```{r global, include=FALSE}
+library(ggplot2)
+library(shiny) # I see that it says runtime:Shiny, but without this line I get errors.
+library(scales)
+library(tidyverse)
+library(flexdashboard)
+source("Riskmodel_Beta.R")
+
+
+# Function Definitions (from Shiny_Alpha.R)
+
+micromortify <- function(Micromorts){
+  mm_names <- c("Driving from NYC to Los Angeles in a motorcycle", "Living Kidney Donation, (https://cjasn.asnjournals.org/content/14/4/597)", "Woman giving birth", "Woman giving birth twice", "Serving in the army in Afganistan in 2009 for one week","Serving in the army Afganistan in 2009 for two weeks","Driving from NYC to Los Angeles and back in a motorcycle","Trucking for 1 year", "Logging for 1 year")
+  mm_values <- c(465, 300, 120,240,336,672,930,280,737)
+  closest_answer <- (abs(mm_values - Micromorts) == min(abs(mm_values - Micromorts)))
+  output_list <- list(name = mm_names[closest_answer], num = mm_values[closest_answer])
+}
+
+basicFormatter <- function(Number, Mode='Pct') {
+  if (Mode == 'Pct') {
+    return(
+      paste0(
+        prettyNum(Number * 100, digits = 3, format = "g", drop0trailing = TRUE), "%")
+    )
+  }
+}
+```
+
+Inputs {.sidebar}
+=======================================================================
+
+```{r}
+# Make the sliders
+
+sliderInput(
+  inputId = 'num_participants', 
+  label = 'Number of Trial Participants', 
+  min = 10, 
+  max = 100,
+  value = 15,
+  step = 1
+)
+
+sliderInput(
+  inputId = 'p_treatment', 
+  label = 'Potential Treatment Efficacy', 
+  min = 0, 
+  max = 0.9,
+  value = 0,
+  step = 0.05
+)
+
+selectInput(
+  'gender', 
+  'Gender of Participants', 
+  choices = c("Male" = "m", "Female" = "f", "Both (Equal Number)" = "b"),
+  selected = "b"
+)
+
+selectInput(
+  'ages', 
+  'Ages of Participants', 
+  c("20 to 29", "20 to 39"), 
+  selected = "20 to 29"
+)
+```
+
+<!-- Notice the ====== vs. -------. These just change how the page is divided up into sections vs. rows -->
+
+Dashboard
+=======================================================================
+
+Row
+-----------------------------------------------------------------------
+
+### Probability of no deaths during study {.value-box}
+
+```{r}
+
+# defines a reactive "function" called outcome_mean. When you want the up to date value, just call outcome_mean() and it'll give you whatever Simulate_StudyRisks returns. It knows where Simulate_StudyRisks is because of the  source("Riskmodel_Alpha.R") line we put at the top of the page.
+deaths_mean <-
+  reactive(
+    1-StudyRisk(
+      Participants = input$num_participants,
+      Age_Range = input$ages,
+      gender = input$gender,
+      Therapy = input$p_treatment,
+      Pctile = '50%',
+      outcome = "death"
+    )
+  )
+
+hosp_mean <-
+  reactive(
+    1-StudyRisk(
+      Participants = input$num_participants,
+      Age_Range = input$ages,
+      gender = input$gender,
+      Therapy = input$p_treatment,
+      Pctile = '50%',
+      outcome = "hosp"
+    )
+  )
+
+
+# this is where we call the actual reactive "function". There are different kinds of renders, such as renderValueBox, renderPlot, etc. Just Google them to see how to use them/what they look like
+
+#bonus, you might consider adding icons, or having color change dynamically as the value changes (e.g. red for high risk, green for low risk). This can also be easily googled.
+renderValueBox({
+  out_mean <- basicFormatter(deaths_mean())
+  valueBox(
+    value = out_mean,
+    # icon = "icon_name"
+    color = muted("red")
+  )
+})
+```
+
+### 95% Confidence, No Deaths {.value-box}
+
+```{r}
+deaths_95 <-
+  reactive(
+    1 - StudyRisk(
+      Participants = input$num_participants,
+      Age_Range = input$ages,
+      gender = input$gender,
+      Therapy = input$p_treatment,
+      Pctile="95%",
+      outcome = "death")
+  )
+
+hosp_95 <- #Needed later.
+  reactive(
+    1 - StudyRisk(
+      Participants = input$num_participants,
+      Age_Range = input$ages,
+      gender = input$gender,
+      Therapy = input$p_treatment,
+      Pctile="95%",
+      outcome = "hosp")
+  )
+
+
+renderValueBox({
+  risk <- basicFormatter(deaths_95())
+  valueBox(
+    value = risk
+  )
+})
+```
+
+### Micromorts {.value-box}
+
+```{r}
+micromorts <-
+  reactive(
+    round(
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = input$gender,
+        outcome = 'death',
+        Therapy = input$p_treatment, Pctile = "50%"
+      ) * 1000000
+    )
+  )
+
+renderValueBox({
+  mm <- micromorts()
+  valueBox(
+    value = mm
+  )
+})
+```
+
+Row
+-----------------------------------------------------------------------
+
+### Activity with Comparable Risk
+
+```{r}
+
+mm_ify = reactive(micromortify(micromorts()))
+
+renderValueBox({
+  mm_name <- mm_ify()$name
+  valueBox(
+    value = mm_name
+  )
+})
+```
+
+Row {.tabset}
+-----------------------------------------------------------------------
+
+### % Risk
+
+```{r}
+graph_risks <-
+  reactive(c(IndivRiskPull(
+        Age_Range = input$ages,
+        gender = input$gender,
+        outcome = 'death',
+        Therapy = input$p_treatment, 
+        Pctile = "50%"),
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = input$gender,
+        outcome = 'hosp',
+        Therapy = input$p_treatment, 
+        Pctile = "50%"),
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = input$gender,
+        outcome = 'death',
+        Therapy = input$p_treatment, 
+        Pctile = "95%"),
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = input$gender,
+        outcome = 'hosp',
+        Therapy = input$p_treatment, 
+        Pctile = "95%")
+  )
+  )
+
+renderPlot({
+    out_expected <- 
+    tribble(
+      ~out_mean, ~status,
+      graph_risks()[1], "Death",
+      graph_risks()[2], "Hospitalized",
+    )
+    
+  out_95_percent <- 
+    tribble(
+      ~out_95, ~status,
+      graph_risks()[3], "Death",
+      graph_risks()[4], "Hospitalized",
+    )
+  
+  # the code below might look weird but it's just vanilla ggplot2. https://dcl-data-vis.stanford.edu/ggplot2-basics.html is a decent start, https://r4ds.had.co.nz/data-visualisation.html is also a great resource!!
+  out_95_percent %>% 
+    ggplot(aes(status, out_95)) +
+    geom_col(fill = "steelblue") +
+    geom_errorbar(
+      aes(y = out_mean, ymin = out_mean, ymax = out_mean), 
+      color = 'black',
+      size = 2,
+      data = out_expected
+    ) +
+    scale_y_continuous(labels = scales::label_percent(scale = 10), breaks = scales::breaks_pretty(7)) +
+    labs(
+      title = "Risk by Outcome",
+      subtitle = "95% probability that actual value is in blue shaded region, black line is expected value",
+      x = NULL,
+      y = "% Risk",
+      color = "Expected"
+    ) +
+    theme_minimal()
+})
+```
+
+### Micromorts
+
+```{r}
+m_micromorts <-
+  reactive(
+    round(
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = 'm',
+        outcome = 'death',
+        Therapy = input$p_treatment, Pctile = "50%"
+      ) * 1000000
+    )
+  )
+
+f_micromorts <-
+  reactive(
+    round(
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = 'f',
+        outcome = 'death',
+        Therapy = input$p_treatment, Pctile = "50%"
+      ) * 1000000
+    )
+  )
+
+b_micromorts <-
+  reactive(
+    round(
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = 'b',
+        outcome = 'death',
+        Therapy = input$p_treatment, Pctile = "50%"
+      ) * 1000000
+    )
+  )
+
+renderPlot({
+  mm <-
+    tribble(
+      ~activity, ~micromorts, ~col,
+      "HCT Volunteer (Male)", m_micromorts(), "Participate",
+      "HCT Volunteer (Female)", f_micromorts(), "Participate",
+      "Motorcycle Trip \n from NYC to LA", 465, "Other",
+      "Living Kidney Donation",300, "Other",
+      "Giving birth", 60, "Other",
+      "Soldier in Afganistan \n in 2009 for 1 week", 336, "Other",
+      "Trucking for 1 year", 280, "Other",
+      "Logging for 1 year", 737, "Other",
+      "Liver Donation \n (left lobe)", 1000, "Other"
+    )
+  mm %>%
+    ggplot(aes(fct_reorder(activity, micromorts, .desc = FALSE), micromorts, fill=col)) +
+    geom_col() +
+    labs(
+      title = "Micromorts by Gender",
+      x = NULL,
+      y = "Micromorts"
+    ) +
+    theme_minimal()
+})
+```
+
+About Model
+=======================================================================
+
+<h3>Methodology</h3>
+  The methodology for this alpha version of the risk model is to use the suite of modeling analyses and data from Salje et al. 2020 to simulate a number of infections chosen, for the study size, above. The simulation is stochastic, so larger samples will be more accurate, but require longer to run. This does not account for the lower risk due to screening out comorbidities, or any risks that differ between intentional exposure trials and natural exposure. It also assumes no rescue therapy is applied, and does not include the greater clinical success of current COVID-19 treatment compared to the treatment available between March and the beginning of May, the time period covered by the Salje et al. data.
+  Note that this model is appropriate for considering a dosage trial. The size of such a trial may vary, but one approach would be to expose 5 volunteers each to 3 increasing titers of COVID-19, stopping if the majority or all volunteers for a given exposure level develop clinical disease. Following this, an additional 10-20 volunteers would be given the appropriate titer of COVID-19, to validate the initial result.
+  We also incorporate a (currently crude) adjustment for comorbidities, based on data from New York. 6.1% of all hospitalized patients are reported to have no comorbidities, per Richardson, et al. and 10% of fatailities in New York have no reported comorbidities, per the New York Dashboard.
+  Salje, H., Kiem, C. T., Lefrancq, N., Courtejoie, N., Bosetti, P., Paireau, J., et al. & Le Strat, Y. (2020). Estimating the burden of SARS-CoV-2 in France. Science.",br("Richardson, S., Hirsch, J. S., Narasimhan, M., Crawford, J. M., McGinn, T., Davidson, K. W., et al. (2020). Presenting characteristics, comorbidities, and outcomes among 5700 patients hospitalized with COVID-19 in the New York City area. Jama.
