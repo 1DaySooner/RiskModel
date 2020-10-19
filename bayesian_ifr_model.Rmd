@@ -207,6 +207,8 @@ There were no issues with convergence of the Bayesian model. We set number of it
 print(fit, c("tau", "sigma", "beta"))
 ```
 
+The mean coefficient of beta `r round(mean(c(as.matrix(fit, "beta[1]"))), 2)` corresponds to `r mean(exp(mean(c(as.matrix(fit, "beta[1]")))))`-fold increase in mortality risk following an infection per each extra decade of age (95% uncertainty interval is `r paste(round(quantile(exp((c(as.matrix(fit, "beta[1]")))), c(.025, .975)),2),collapse = "-")`).
+
 From these parameters we can predict average risks for subjects of any given age $x$, by using the posterior distribution of $\tau + (10x + 2.5) \beta$ (where 2.5 and 10 refer to the transformation we applied to `MedianAge` inputs).
 
 
@@ -228,9 +230,9 @@ Since we centered our `MedianAge` at 25 years in constructing our matrix $X$, we
 
 However, there is a considerable variability in IFRs across different locations/dataset that we should consider. To take into account parameter $\sigma$, we can generate draws from the $\mathcal{N}(\tau, \sigma^2)$ distribution, corresponding to a hypothetical IFR in a new source of data. 95% interval for such model runs from `r quantile(replications, .025)` to `r quantile(replications, .975)`. Since the model works a logistic scale, another way of interpreting the across-dataset variability is reporting the fold-impact of $\sigma$ on the mean IFR; here, we obtain on average a `r mean(exp(2*hypersd))`-fold increase (decrease) in IFR per $2\sigma$ increase (decrease).
 
-The lower end of the 95% interval, `r quantile(replications, .025)`, is not extreme given input data, where the "crude" mean IFR (based on mean prevalence only) is below 7 per 10,000 for all data, except for South Florida, and as low as 1.4 per 10,000 in Utah, in the population aged 19-44.
+The lower end of the 95% interval, `r quantile(replications, .025)`, is not extreme given input data, where the "crude" mean IFR (based on mean prevalence only) is below 7 per 10,000 for all data except for South Florida, and as low as 0 for some countries that did not record deaths (Belgium, New Zealand, Korea, Iceland) in various age groups including 20-29 year olds or 1.4 per 10,000 in Utah, in the population aged 19-44. (Please refer to Table \@ref(tab:input-data-tab) for complete list of inputs.)
 
-```{r}
+```{r, eval = FALSE}
 df %>% filter(Median_Age > 10, Median_Age < 35) %>% 
   select(Study, AgeGroup, Deaths, Population, ir) %>%
   mutate(crude_ifr = Deaths/(Population*ir))
@@ -244,7 +246,7 @@ names(theta_mean) <- levels(as.factor(df$Study))
 We can assess this heterogeneity by inspecting the distribution of random effects in the model transformed into IFRs, 
 i.e. the inverse logit transformation $\theta$ parameters. 
 The largest (posterior mean) IFR value of $\theta$ is `r inv_logit(max(theta_mean))` in `r names(theta_mean)[which.max(theta_mean)]`.
-The smallest posterior mean is `r inv_logit(min(theta_mean))` in `r names(theta_mean)[which.min(theta_mean)]`.
+The smallest posterior mean for 20-29 year olds is `r inv_logit(min(theta_mean))` in `r names(theta_mean)[which.min(theta_mean)]`.
 
 
 
@@ -349,7 +351,7 @@ gridExtra::grid.arrange(grobs = list(gg + ggtitle("A"),
 
 \pagebreak
 
-# What is the risk in healthy individuals?
+# What is the risk in healthy individuals? (!!!placeholder!!!)
 
 
 ```{r}
