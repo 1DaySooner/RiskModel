@@ -2,3 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
+bayesian_ifr_model_files
+bayesian_ifr_model_cache
+bayesian_ifr_model.log
+ifr_with0.rds

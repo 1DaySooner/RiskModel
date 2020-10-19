@@ -2,7 +2,9 @@
 title: "Bayesian model for COVID IFR"
 author: "Witold Wiecek for 1 Day Sooner"
 date: "Last updated `r Sys.Date()`"
-output: pdf_document
+output: 
+  bookdown::pdf_document2:
+    toc: false
 bibliography: bibliography.bib
 ---
 
@@ -11,8 +13,11 @@ knitr::opts_chunk$set(echo = FALSE)
 library(baggr)
 library(tidyverse)
 library(readxl)
+library(knitr)
+library(kableExtra)
 # Stan stuff:
 library(rstan)
+set.seed(1990)
 rstan_options(auto_write = TRUE)
 sm <- stan_model("ifr_with0.stan")
 options(mc.cores = 4, digits = 2)
@@ -31,9 +36,7 @@ To address these drivers of differences in observed IFRs we develop a Bayesian m
 
 
 
-# Methods
-
-## Bayesian model for evidence synthesis
+# Evidence synthesis model
 
 What follows is an adaptation of typical methods of Bayesian evidence synthesis to analysis of IFRs. IFR is a proportion statistic, calculated as the ratio of deaths to infections in some population. Early estimates, e.g. by @verity_estimates_2020, place it at over 0.6% globally. However, the risk of death is orders of magnitude higher in particular high risk groups, especially in the elderly, than in the general population.
 
@@ -42,7 +45,7 @@ We can use Bayesian models for repeated binary trials, accounting for the fact t
 The most straight-forward and "canonical" ways to implement such a Bayesian model is by modelling log odds of the event.^[It is also possible to work with $IFR_i$ parameters and treat them as derived from Beta distribution with some "hyperparameters" $\alpha$ and $\beta$ of Beta distribution, as done by e.g. @carpenter_hierarchical_2016. That approach, however, does not offer an easy way of modelling impact of covariates (e.g. age and co-morbidities) on the rates.]
 @deeks_issues_2002 present a general treatment. Note, that for very rare events the odds of mortality are very similar to probability of mortality, but we model events on odds scale as a good "generic" approach to modelling binary data (in this case death following infections). Another advantage of such a model is that it can use either individual-level or summary data and work with covariates (such as gender, age, time of the study, co-morbidities), captured as odds ratios or risk ratios^[If only summary data are available, covariates can be defined as study level distributions (e.g. % male)]. 
 
-Basic models for analysis of binary data can be implemented using existing statistical analysis packages (see, for example, _baggr_  by @wiecek_baggr_2020), by treating IFR as a logit-normal parameter to meta-analyse. However, note that when no deaths are observed, analysis of the ratio statistic that is IFR (ratio of observed deaths to modelled infections) is problematic. Therefore we propose a "custom" model that built in Stan which treats deaths and _prevalences_ as data (rather than the IFRs). 
+Basic models for analysis of binary data can be implemented using existing statistical analysis packages (see, for example, _baggr_  by @wiecek_baggr_2020), by treating IFR as a logit-normal parameter to meta-analyse. However, note that when no deaths are observed, analysis of IFR (equal to observed deaths divided by modelled infections) is problematic. Therefore we propose a "custom" model that built in Stan which treats deaths and _prevalences_ as data (rather than the IFRs). 
 
 Let $d_k$ denote observed deaths for data point $k$ and assume that logit of prevalence $p_k$ in the population of $n_k$ subjects is obtained from some model. We can then write:
 
@@ -54,7 +57,7 @@ d_k & \sim \text{Binomial}(n_k, p_kIFR_k) \\
 where $\sigma^{(p)}_k$ and $\mu^{(p)}_k$ are parameters derived from the existing models of prevalence.
 
 The $k$ data points collected can span many locations (studies); we denote them by $\text{loc}_k$ and the total number of locations by $N_{loc}$
-We can also collect other covariates impacting the IFRs, such as age groups (which we identify with median age of the population being studied, $\text{MedianAge}_k$). We denote all of the covariates using a design matrix $X$ and denote by $N_p$ the number of columns in $X$. 
+We can also collect other covariates impacting the IFRs, such as age groups (which we identify with median age of the population being studied, $\text{MedianAge}_k$). To center our $X$ at the value of interest in our model (risk in 20-30 year olds), we use a transformation `MedianAge/10 - 2.5` to construct our matrix $X$. We denote all of the covariates using a design matrix $X$ and denote by $N_p$ the number of columns in $X$. 
 We assume the impact on IFR is on logit scale, same as in the "canonical" logistic models of binary data that we mentioned above:
 
 $$
@@ -62,18 +65,19 @@ $$
 $$
 where $\theta$ is an $N_{loc}$-dimensional vector of location-specific (random) effects on IFR and $\beta$ is $N_p$ dimensional vector of (fixed) covariate effects.
 
-We implement our model in Stan and assume very weakly informative priors on all parameters:
+We implement our model in Stan and assume weakly informative priors on all parameters, with prior for $\tau$ centered at 1 death per 10,000. 
 
 ```
 model {
-  //Likelihood:
-  // logit_ifr = theta_k[loc] + to_vector(X*beta);
+  //Uncertain prevalence estimates:
   logit_prevalence ~ normal(mean_prevalence, sd_prevalence);
+  //Likelihood of mortality:
   obs_deaths ~ binomial(population, prevalence .* ifr);
+  //Hierarchical component of the model (location-specific theta):
   theta_k ~ normal(tau, sigma);
 
   //Priors:
-  tau   ~ normal(0, 100);
+  tau   ~ normal(logit(.0001), 5);
   sigma ~ normal(0, 10);
   beta  ~ normal(0, 10);
 }
@@ -85,11 +89,15 @@ model {
 
 
 
-## Model data
+# Data on age-specific mortality risk
 
-We use estimates originally collected by @levin_assessing_2020 to construct the first version of analysis dataset. The input data into our model consists of deaths (treated as known) and prevalences (treated as logit-distributed parameter with known mean and SD) in all reported age groups in all studies^[This basic approach exaggerates uncertainty, as we treat different 95% intervals reported in the study as uncorrelated.].
+We used estimates originally collected by @levin_assessing_2020 to construct the first version of analysis dataset, which we then supplemented with more values extracted from other studies. __Write-up of data collection here.__ The input data into our model consists of deaths (treated as known) and prevalences (treated as logit-distributed parameter with known mean and SD) in all reported age groups in all studies^[This basic approach exaggerates uncertainty, as we treat different 95% intervals reported in the study as uncorrelated.]. All of input data are reported in Table \@ref(tab:input-data-tab).
 
-```{r, include = F}
+We made only minimal modifications to source data, by 1) imputing the values in Italian study (__David to describe__?), 2) imputing population size in Maranhao (as ratio of the reported number of infections and the mean infection rate) which were not reported and 3) assuming that uncertainty in prevalence 0-29 age group in Iceland is same as in the 30-39 age group since data were missing.
+
+Our model treats number of Covid-attributable deaths as measured without error (due to lack of data) but accounts for uncertainty in infection rates, which are always model-based estimated extracted from various available data sources. We assume that logits of prevalence estimates from available studies are normally distributed, which seems to reproduce almost all of data perfectly, see Figure \@ref(prevalence-data) in the Supplement.
+
+```{r read-data, eval = F}
 # Several different datasets.
 NBER_IFR_Benchmark_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xlsx',1)
 #Places: Belgium. Geneva, Indiana, New York, Spain, Sweden
@@ -100,11 +108,21 @@ names(NBER_IFR_US_Studies)[10:11]<-c('IFR_95_lower','IFR_95_upper')
 # NBER_All_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xls',5)
 ```
 
+```{r read-joint-data}
+all_data_xls <- read_excel("Study Summary Data/1DS_Meta_Dataset_ww.xls") %>%
+                           # col_types = c("text", "text", "date", "date", rep("text", 4), "numeric", "text", rep("numeric", 11))) %>%
+  rename(Study = StudyName) %>%
+  # Use imputed deaths and population sizes where neeeded
+  mutate(Deaths = ifelse(is.na(Deaths) & !is.na(`Imputed Deaths`), `Imputed Deaths`, Deaths)) %>%
+  mutate(Population = ifelse(is.na(Population) & !is.na(`Imputed Population`), `Imputed Population`, Population))
+```
+
+
 ```{r}
 logit <- function(x) log(x/(1-x))
 inv_logit <- function(x) exp(x)/(1+exp(x))
 
-ifr_global <- NBER_IFR_Benchmark_Studies %>%
+ifr_joint <- all_data_xls %>%
   group_by(Study) %>%
   mutate(ir = InfectionRate/100, 
          ir_low = infrate_ci95_low/100, 
@@ -112,38 +130,49 @@ ifr_global <- NBER_IFR_Benchmark_Studies %>%
   select(Study, AgeGroup, Median_Age, Deaths, Population, ir, ir_low, ir_high) %>%
   mutate(dataset = "Global")
 
-ifr_us <- NBER_IFR_US_Studies %>%
-  filter(!is.na(AgeGroup)) %>%
-  group_by(Study) %>%
-  mutate(ir = `Infection Rate (%)`/100, 
-         ir_low = `Infect 95_lower`/100, 
-         ir_high = `Infect 95_upper`/100) %>%
-  select(Study, AgeGroup, Median_Age, Deaths, Population, ir, ir_low, ir_high) %>%
-  mutate(dataset = "United States")
+# ifr_global <- NBER_IFR_Benchmark_Studies %>%
+#   group_by(Study) %>%
+#   mutate(ir = InfectionRate/100, 
+#          ir_low = infrate_ci95_low/100, 
+#          ir_high = infrate_ci95_high/100) %>%
+#   select(Study, AgeGroup, Median_Age, Deaths, Population, ir, ir_low, ir_high) %>%
+#   mutate(dataset = "Global")
+# 
+# ifr_us <- NBER_IFR_US_Studies %>%
+#   filter(!is.na(AgeGroup)) %>%
+#   group_by(Study) %>%
+#   mutate(ir = `Infection Rate (%)`/100, 
+#          ir_low = `Infect 95_lower`/100, 
+#          ir_high = `Infect 95_upper`/100) %>%
+#   select(Study, AgeGroup, Median_Age, Deaths, Population, ir, ir_low, ir_high) %>%
+#   mutate(dataset = "United States")
 ```
 
-```{r prevalence-data, fig.cap = "Distribution of model-estimated prevalences (95% CI's reported by modelling studies) collected by @levin_assessing_2020. Additional points show 95% CIs recreated by assuming logit-normal distribution of prevalence.", fig.height = 9.5, fig.width = 6}
-rbind(ifr_global, ifr_us) %>%
-  mutate(log_sd = ifelse(ir_low != 0, 
-                         (logit(ir_high) - logit(ir_low))/(2*1.96), 
-                         (logit(ir_high) - logit(ir))/1.96)) %>%
-  mutate(log_mean = logit(ir)) %>%
-  mutate(midpoint_u = log_mean + log_sd*1.96, midpoint_l = log_mean - log_sd*1.96) %>%
-  ggplot(aes(x=ir, xmax = ir_high, xmin=ir_low, y=interaction(Study, AgeGroup))) + 
-  geom_point() + geom_errorbarh() +
-  geom_point(aes(x = inv_logit(midpoint_l)), pch = 21) +
-  geom_point(aes(x = inv_logit(midpoint_u)), pch = 21) +
-  xlab("Infection rate (95% interval)") + ylab("")
 
-```
 
-```{r}
-df <- rbind(ifr_global, ifr_us) %>%
+```{r prep-data}
+# df <- rbind(ifr_global, ifr_us) %>%
+df <- ifr_joint %>%
   mutate(logit_sd = ifelse(ir_low != 0, 
                          (logit(ir_high) - logit(ir_low))/(2*1.96), 
                          (logit(ir_high) - logit(ir))/1.96)) %>%
-  mutate(logit_mean = logit(ir))
+  mutate(logit_mean = logit(ir)) %>%
+  filter(!is.na(Deaths), !is.na(logit_sd), !is.na(logit_mean), !is.na(Population))
+```
 
+
+
+
+```{r}
+df_age <- df %>% mutate(age = gsub("\\+", "-Inf", AgeGroup)) %>%
+  separate(age, c("ageMin", "ageMax")) %>%
+  select(Study, ageMin, ageMax) 
+good_data_pts <- sum(df_age$ageMin < 30 & df_age$ageMax > 20)
+```
+
+Our construction of age variable and use of all available data (rather than the subset of data available in younger adults only) is necessitated by data limitations: out of `r nrow(df_age)` data points comprising age-specific estimates of prevalence (or IFR) and counts of deaths, `r good_data_pts` contain individuals aged 20-30 who are of primary interest to us. However, the populations are mixed with regards to age, with typical age groupings such as 19-49, 20-49, 20-39, 0-49 used instead. In fact, we find only one estimate out of `r good_data_pts` that is entirely specific to the 20-29 age group (Brazilian state of Maranhao). 
+
+```{r stan-data}
 mm <- model.matrix(ir ~ Study + Median_Age, data = df)
 stan_data <- list(
   X = matrix(df$Median_Age/10 - 2.5, nrow(df), 1),
@@ -153,47 +182,63 @@ stan_data <- list(
   loc = as.numeric(as.factor(df$Study)),
   mean_prevalence = df$logit_mean,
   sd_prevalence = df$logit_sd,
-  population = df$Population,
-  obs_deaths = df$Deaths)
+  population = as.integer(df$Population),
+  obs_deaths = as.integer(df$Deaths))
 ```
 
 
-```{r, cache = TRUE}
-fit <- sampling(sm, data = stan_data, control = list(max_treedepth = 15), refresh = 0)
+# Results: age-specific risk of Covid mortality
+
+
+```{r run-stan-model, eval = FALSE}
+fit <- sampling(sm, data = stan_data, control = list(max_treedepth = 15), 
+                iter = 5000, refresh = 0)
+saveRDS(fit, file = "output/main_stan_model.rds")
 ```
 
 ```{r}
+fit <- readRDS("output/main_stan_model.rds")
+```
+
+There were no issues with convergence of the Bayesian model. We set number of iterations to 5,000 and used 4 chains, with `max_treedepth` option set to 15. There were no divergent transitions and effective sample size was greater than `r round(min(summary(fit)$summary[,"n_eff"]))` for all of `r length(summary(fit)$summary[,"n_eff"]) - 1` modeled parameters. For the three main parameters in the model we obtained the following:
+
+```{r}
+
 print(fit, c("tau", "sigma", "beta"))
 ```
+
+From these parameters we can predict average risks for subjects of any given age $x$, by using the posterior distribution of $\tau + (10x + 2.5) \beta$ (where 2.5 and 10 refer to the transformation we applied to `MedianAge` inputs).
+
+
 
 ## Average infection fatality risk in young subjects
 
 ```{r}
 hypermean <- (rstan::extract(fit, "tau")[[1]])
 hypersd <- (rstan::extract(fit, "sigma")[[1]])
-
+nsamples <- length(hypermean)
 hyperifr <- inv_logit(hypermean)
-replications <- inv_logit(rnorm(4000, hypermean, hypersd))
+replications <- inv_logit(rnorm(nsamples, hypermean, hypersd))
 ```
 
-Since we use a transformation `MedianAge/10 - 2.5` to construct our matrix $X$, we can obtain model-estimated risk for a typical HCT population (aged 20 to 30, with median 25) by ignoring the $\beta$ coefficient and examining $\tau$ and $\sigma$ only. We find that the average IFR for this group (equal to $\frac{\exp{(\tau)}}{\exp{(1 + \tau)}}$) is `r mean(hyperifr)` (with 95% interval from `r quantile(hyperifr, .025)` to `r quantile(hyperifr, .975)`). That means slightly under 2 deaths per 10,000 infections in the studied datasets.
+Since we centered our `MedianAge` at 25 years in constructing our matrix $X$, we can now obtain model-estimated risk for a typical HCT population (aged 20 to 30, with median 25) by ignoring the $\beta$ coefficient and examining $\tau$ and $\sigma$ only. We find that the average IFR for this group (equal to $\frac{\exp{(\tau)}}{\exp{(1 + \tau)}}$) is `r mean(hyperifr)` (with 95% interval from `r quantile(hyperifr, .025)` to `r quantile(hyperifr, .975)`). That means, on average, slightly under 2 deaths per 10,000 infections in the studied datasets.
 
 
 ## Heterogeneity in IFRs
 
-There is a considerable variability in IFRs across different locations/dataset. To take into account parameter $\sigma$, we can generate draws from the $\mathcal{N}(\tau, \sigma^2)$ distribution, corresponding to a hypothetical IFR in a new source of data. 95% interval for such model runs from `r quantile(replications, .025)` to `r quantile(replications, .975)`. Since the model works a logistic scale, another way of interpreting the across-dataset variability is asking the impact of $\sigma$ on the mean IFR; here, we obtain on average a `r mean(exp(2*hypersd))`-fold increase (decrease) in IFR per $2\sigma$ increase (decrease).
+However, there is a considerable variability in IFRs across different locations/dataset that we should consider. To take into account parameter $\sigma$, we can generate draws from the $\mathcal{N}(\tau, \sigma^2)$ distribution, corresponding to a hypothetical IFR in a new source of data. 95% interval for such model runs from `r quantile(replications, .025)` to `r quantile(replications, .975)`. Since the model works a logistic scale, another way of interpreting the across-dataset variability is reporting the fold-impact of $\sigma$ on the mean IFR; here, we obtain on average a `r mean(exp(2*hypersd))`-fold increase (decrease) in IFR per $2\sigma$ increase (decrease).
 
-The lower end of the 95% interval, `r quantile(replications, .025)`, is not extreme given input data, where the "crude" mean IFR (based on mean prevalence only) is below 7 per 10,000 for all data, except for South Florida, and as low as 1.4 per 10,000 in Utah, in population aged 19-44.
+The lower end of the 95% interval, `r quantile(replications, .025)`, is not extreme given input data, where the "crude" mean IFR (based on mean prevalence only) is below 7 per 10,000 for all data, except for South Florida, and as low as 1.4 per 10,000 in Utah, in the population aged 19-44.
 
 ```{r}
 df %>% filter(Median_Age > 10, Median_Age < 35) %>% 
   select(Study, AgeGroup, Deaths, Population, ir) %>%
   mutate(crude_ifr = Deaths/(Population*ir))
 ```
+
 ```{r}
 theta_mean <- summary(fit, "theta_k")$summary[,"mean"]
 names(theta_mean) <- levels(as.factor(df$Study))
-
 ```
 
 We can assess this heterogeneity by inspecting the distribution of random effects in the model transformed into IFRs, 
@@ -215,27 +260,94 @@ df_cov <- data.frame(study = df$Study,
   summarise(n = n(), coverage975 = sum(coverage975), coverage50 = sum(coverage50))
 ```
 
-We constructed posterior predictive distributions for number of deaths in each of the inputs by using the `generated quantities` functionality of Stan. 
-Out of `r df_cov$n` observations that were used to fit the model, `r df_cov$coverage975` were within 95% intervals of the 
-posterior predictive distributions, with 3 discrepancies occuring in Spanish data. 
-This suggests that the simple binomial model we used here is flexible enough to capture both age-specific risk increases and differences across countries.
+We constructed posterior predictive distributions for number of deaths in each of the inputs by using the `generated quantities` functionality of Stan. Figure \@ref(fig:obs-est-deaths) compares the posterior means and 95% intervals with observed deaths. Out of `r df_cov$n` observations that were used to fit the model, `r df_cov$coverage975` were within 95% intervals of the posterior predictive distributions. We observed the largest discrepancies occured in Spanish data. Overall, we conclude that the simple binomial model we used here is flexible enough to capture both age-specific risk increases and heterogeneity in IFRs across settings/countries. 
 
-
-Plot of the ppc 95% intervals vs observed N deaths
-
-```{r}
+```{r obs-est-deaths, fig.width = 10, fig.height = 10, fig.cap = "Comparison of model estimates (black) with observed mortality (red), compared on logarithmic scale. Bars are 95% posterior interval; point is the mean. For better clarity, we grouped the plot into four panels according to observed mortality. X axes on each panel differ. For many low-risk populations no deaths were reported: we indicate this by plotting a red point on the left-hand side of the panel plot.", warning = FALSE}
 data.frame(study = df$Study, 
            age = df$AgeGroup,
            observed = df$Deaths,
            summary(fit, "ppc_deaths")$summary) %>% 
   mutate_if(is.numeric, function(x) x/df$Population) %>%
-  mutate(deaths_cut = cut(observed, c(-Inf, 1/1e06, 10/1e06, 100/1e06, Inf))) %>%
+  mutate(deaths_cut = cut(observed, c(-Inf, 1/1e06, 50/1e06, 500/1e06, Inf),
+                          c("< 1 per million", "1-50 per million", "50-500 per million", "over 500 per million"))) %>%
   ggplot(aes(y=interaction(study, age))) + 
   geom_point(aes(x = mean)) + 
   geom_errorbarh(aes(xmin = X2.5., xmax = X98.)) + 
   geom_point(aes(x = observed), color = "red") + 
-  facet_wrap(~deaths_cut, ncol = 2, scales = "free")
+  facet_wrap(~deaths_cut, ncol = 2, scales = "free") +
+  scale_x_log10() +
+  xlab("Covid-attributable mortality") + ylab("")
 ```
+
+```{r}
+hypermean <- (rstan::extract(fit, "tau")[[1]])
+hypersd <- (rstan::extract(fit, "sigma")[[1]])
+beta <-  (rstan::extract(fit, "beta[1]")[[1]])
+
+
+hyperifr <- inv_logit(hypermean)
+replications <- inv_logit(rnorm(nsamples, hypermean, hypersd))
+
+df_rep <- data.frame(age = rep(seq(1, 85), each = 5e04)) %>%
+  mutate(hypermean = sample(hypermean, nrow(.), replace = T),
+         hypersd = sample(hypersd, nrow(.), replace = T),
+         beta = sample(beta, nrow(.), replace = T)) %>%
+  mutate(mean_draw = hypermean + beta*(age/10 - 2.5)) %>%
+  mutate(rep_draw  = rnorm(nrow(.), mean_draw, hypersd)) %>%
+  select(age, mean_draw, rep_draw)
+
+mint <- function(x) c(quantile(x, .025), mean(x), quantile(x, .975))
+mint_nm <- c("q025", "mean", "q975")
+
+df_ifr <- 
+  data.frame(#df$Study, 
+             df$Median_Age, 
+             summary(fit, "ifr")$summary[, c("2.5%", "mean", "98%")]) %>% 
+  setNames(c("age", "q025", "mean", "q975")) %>%
+  mutate(key = "ifr")
+
+```
+
+```{r ifr-plot, fig.cap = "IFR as a function of age. Narrower ribbon corresponds to the 95% posterior interval of average across all included studies (tau parameter in the meta-analysis model), while the wider band takes into account heterogeneity (tau and sigma). Red points are model estimates of mean IFRs in partciular studies, with bars representing 95% posterior intervals. Panel A is untransformed data and panel B is same data on log 10 scale.", fig.height = 10, fig.width = 8}
+
+
+gg <- df_rep %>% 
+  group_by(age) %>%
+  mutate(mean_draw = inv_logit(mean_draw), rep_draw = inv_logit(rep_draw)) %>%
+  summarise(mean = mint(mean_draw), stat = mint_nm, rep = mint(rep_draw),
+            .groups = "keep") %>%
+  gather(key, value, -age, -stat) %>%
+  spread(stat, value) %>%
+  mutate(key = factor(key, levels = c("mean", "rep"), 
+                      labels = c("Mean over included studies", 
+                                 "Replication (taking heterogeneity into account)"))) %>%
+  ggplot(aes(x=age, y = mean, ymin = q025, ymax = q975, fill = key, lty = key)) +
+  geom_ribbon(alpha = .75) +
+  geom_line() +
+  geom_point(data = df_ifr, color = "red") +
+  geom_errorbar(data = df_ifr, color = "red") +
+  scale_fill_grey() +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  ylab("Infection fatality rate") +
+  coord_cartesian(xlim = c(0.1, 80), ylim = c(1e-6, .2))
+
+gridExtra::grid.arrange(grobs = list(gg + ggtitle("A"), 
+                                     gg + scale_y_log10() + ggtitle("B") + theme(legend.position = "none")), ncol = 1)
+```
+
+```{r}
+
+```
+
+## Robustness checks
+
+* Exclusion of small studies and test & trace data
+* Median age: exclusion of 80+
+* Median age: different method of age imputation
+* Model with time
+
+\pagebreak
 
 # What is the risk in healthy individuals?
 
@@ -250,7 +362,7 @@ stan_df <- open_safely %>%
   mutate(p = f/Population) 
 ```
 
-Data for this section has been provided by OpenSAFELY (_https://opensafely.org/_) and is as described by @williamson_factors_2020 in a recent article on Covid-19 mortality risk factors for 10,926 Covid-19 deaths in England. We group the total of 21,444,863 individuals into high and low risk groups as follows:
+Data for this section has been provided by OpenSAFELY (<https://opensafely.org/>) and is as described by @williamson_factors_2020 in a recent article on Covid-19 mortality risk factors for 10,926 Covid-19 deaths in England. We group the total of 21,444,863 individuals into high and low risk groups as follows:
 
 __Definition of co-morbiditiy goes here__
 
@@ -320,5 +432,53 @@ data.frame(
   facet_grid(Healthy.Weight ~ No.Comorbidities)
 ```
 
+
+\pagebreak
+
+```{r prevalence-data, fig.cap = "Comparison of model-estimated prevalences (95% CI's reported by modelling studies) collected by @levin_assessing_2020 and our distributional assumptions: additional circles show 95% CIs recreated by assuming logit-normal distribution of prevalence. We group studies into 4 bands of mortality to mirror earlier figures. Please note that this approach produces discrepancies in a number of US estimates where the confidence intervals were skewed toward including 0. However, since we do not have access to source data, we decided to use the logit-normal assumption for all estimates. This assumption may have an effect of overestimating mortality risk in settings where prevalence was very low.", fig.height = 9.5, fig.width = 9.5, warning = FALSE}
+df %>% 
+  mutate(midpoint_u = logit_mean + logit_sd*1.96, midpoint_l = logit_mean - logit_sd*1.96) %>%
+  mutate(Median_Age = ifelse(is.na(Median_Age), 0, Median_Age)) %>%
+  mutate(deaths_cut = cut(Deaths/Population, c(-Inf, 1/1e06, 50/1e06, 500/1e06, Inf),
+                          c("< 1 per million", "1-50 per million", "50-500 per million", "over 500 per million"))) %>%
+  
+  ggplot(aes(x=ir, xmax = ir_high, xmin=ir_low, y=interaction(Study, AgeGroup))) + 
+  geom_point() + geom_errorbarh() +
+  geom_point(aes(x = inv_logit(midpoint_l)), pch = 21) +
+  geom_point(aes(x = inv_logit(midpoint_u)), pch = 21) +
+  xlab("Infection rate (95% interval)") + ylab("") +
+  facet_wrap(~ deaths_cut, ncol = 2, scales = "free") +
+  scale_x_log10()
+
+```
+
+\pagebreak
+
+```{r input-data-tab}
+df_tab <- all_data_xls %>% 
+  arrange(Median_Age, Study) %>%
+  select(Study, StudyScale, StudyType, EndDate, 
+         AgeGroup, 
+         Deaths, 
+         Population, InfectionRate, infrate_ci95_high, infrate_ci95_low) %>%
+  filter(!is.na(Deaths), !is.na(InfectionRate), !is.na(Population)) %>%
+  # mutate(ir_95 = paste0(round(infrate_ci95_low, 1), ", ", round(infrate_ci95_high, 1))) %>%
+  # select(-infrate_ci95_low, -infrate_ci95_high) %>%
+  mutate(ifr = 1e05*Deaths/(Population*InfectionRate)) %>%
+  mutate(infrate_ci95_low = round(infrate_ci95_low, 2)) %>%
+  mutate(infrate_ci95_high = round(infrate_ci95_high, 2)) %>%
+  mutate(InfectionRate = round(InfectionRate, 2)) %>%
+  mutate(Deaths = round(Deaths)) %>%
+  mutate(Population = round(Population)) 
+
+kbl(df_tab,  longtable = TRUE, booktabs = TRUE,
+      caption = "Complete table of inputs used by the meta-analysis model and crude IFR's.",
+      col.names = c("Study location", "Scale", "Type", "End date", "Age", 
+                    "Deaths", "N", "Mean", "2.5%", "97.5%", "IFR/100k"))%>%
+  kable_styling(latex_options = c("repeat_header")) %>%
+  add_header_above(c(" " = 7, "Infection rate (%)" = 3, " " = 1)) %>%
+  landscape()
+  
+```
 
 # References
