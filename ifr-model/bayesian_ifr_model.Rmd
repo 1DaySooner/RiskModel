@@ -1,6 +1,6 @@
 ---
 title: "Bayesian model for COVID IFR"
-author: "Witold Wiecek for 1 Day Sooner"
+author: "Witold Więcek for 1 Day Sooner"
 date: "Last updated `r Sys.Date()`"
 output: 
   bookdown::pdf_document2:
@@ -38,14 +38,14 @@ To address these drivers of differences in observed IFRs we develop a Bayesian m
 
 # Evidence synthesis model
 
-What follows is an adaptation of typical methods of Bayesian evidence synthesis to analysis of IFRs. IFR is a proportion statistic, calculated as the ratio of deaths to infections in some population. Early estimates, e.g. by @verity_estimates_2020, place it at over 0.6% globally. However, the risk of death is orders of magnitude higher in particular high risk groups, especially in the elderly, than in the general population.
+What follows is an adaptation of typical methods of Bayesian evidence synthesis to analysis of IFRs. IFR is the ratio of deaths to infections in a given population. Early estimates, e.g. by @verity_estimates_2020, place it at over 0.6% globally. However, it's evident from data that IFR is orders of magnitude higher in particular high risk groups, especially in the elderly, than in the general population. Such relationship seems to be consistent across different countries.
 
-We can use Bayesian models for repeated binary trials, accounting for the fact that different populations studies at different times have different average probability of events. We use hierarchical modelling framework to assume that the context-specific estimates of $IFR_i$ (measured in different settings, with some uncertainty) are all linked using some common parameters.
+We can use Bayesian meta-analysis models to account for the fact that different population studies at different times have different average probability of events. We use hierarchical modelling framework to assume that the context-specific estimates of $IFR_i$ (measured in different settings, with some uncertainty) are linked through some common parameters.
 
-The most straight-forward and "canonical" ways to implement such a Bayesian model is by modelling log odds of the event.^[It is also possible to work with $IFR_i$ parameters and treat them as derived from Beta distribution with some "hyperparameters" $\alpha$ and $\beta$ of Beta distribution, as done by e.g. @carpenter_hierarchical_2016. That approach, however, does not offer an easy way of modelling impact of covariates (e.g. age and co-morbidities) on the rates.]
+The most straight-forward and "canonical" way to implement such a Bayesian model is by modelling log odds of the event.^[It is also possible to work with $IFR_i$ parameters and treat them as derived from Beta distribution with some "hyperparameters" $\alpha$ and $\beta$ of Beta distribution, as done by e.g. @carpenter_hierarchical_2016. That approach, however, does not offer an easy way of modelling impact of covariates (e.g. age and co-morbidities) on the rates.]
 @deeks_issues_2002 present a general treatment. Note, that for very rare events the odds of mortality are very similar to probability of mortality, but we model events on odds scale as a good "generic" approach to modelling binary data (in this case death following infections). Another advantage of such a model is that it can use either individual-level or summary data and work with covariates (such as gender, age, time of the study, co-morbidities), captured as odds ratios or risk ratios^[If only summary data are available, covariates can be defined as study level distributions (e.g. % male)]. 
 
-Basic models for analysis of binary data can be implemented using existing statistical analysis packages (see, for example, _baggr_  by @wiecek_baggr_2020), by treating IFR as a logit-normal parameter to meta-analyse. However, note that when no deaths are observed, analysis of IFR (equal to observed deaths divided by modelled infections) is problematic. Therefore we propose a "custom" model that built in Stan which treats deaths and _prevalences_ as data (rather than the IFRs). 
+Basic models for this type of analysis of binary data can be implemented using existing statistical analysis packages (see, for example, _metafor_ package in R or _baggr_  by @wiecek_baggr_2020), by treating IFR as a logit-normal parameter to meta-analyse. However, note that when no deaths are observed, analysis of IFR (equal to observed deaths divided by modelled infections) is problematic. Therefore we propose a "custom" model that built in Stan which treats deaths and _prevalences_ (rather than the IFRs) as data. 
 
 Let $d_k$ denote observed deaths for data point $k$ and assume that logit of prevalence $p_k$ in the population of $n_k$ subjects is obtained from some model. We can then write:
 
@@ -54,10 +54,9 @@ d_k & \sim \text{Binomial}(n_k, p_kIFR_k) \\
 \text{logit}(p_k) & \sim \mathcal{N}(\mu^{(p)}_k, \sigma^{(p)}_k)
 \end{align}
 
-where $\sigma^{(p)}_k$ and $\mu^{(p)}_k$ are parameters derived from the existing models of prevalence.
+where $\sigma^{(p)}_k$ and $\mu^{(p)}_k$ are parameters derived from the existing models of prevalence. The $k$ data points collected can span many locations (studies); we denote them by $\text{loc}_k$ and the total number of locations by $N_{loc}$.
 
-The $k$ data points collected can span many locations (studies); we denote them by $\text{loc}_k$ and the total number of locations by $N_{loc}$
-We can also collect other covariates impacting the IFRs, such as age groups (which we identify with median age of the population being studied, $\text{MedianAge}_k$). To center our $X$ at the value of interest in our model (risk in 20-30 year olds), we use a transformation `MedianAge/10 - 2.5` to construct our matrix $X$. We denote all of the covariates using a design matrix $X$ and denote by $N_p$ the number of columns in $X$. 
+In this model we can also account for various covariates impacting the IFRs, such as age groups (which we identify with median age of the population being studied, $\text{MedianAge}_k$). We code them in a design matrix $X$. To center our $X$ at the value of interest in our model (risk in 20-30 year olds), we use a transformation `MedianAge/10 - 2.5` to construct our matrix $X$. We denote all of the covariates using a design matrix $X$ and denote by $N_p$ the number of columns in $X$. 
 We assume the impact on IFR is on logit scale, same as in the "canonical" logistic models of binary data that we mentioned above:
 
 $$
@@ -65,7 +64,7 @@ $$
 $$
 where $\theta$ is an $N_{loc}$-dimensional vector of location-specific (random) effects on IFR and $\beta$ is $N_p$ dimensional vector of (fixed) covariate effects.
 
-We implement our model in Stan and assume weakly informative priors on all parameters, with prior for $\tau$ centered at 1 death per 10,000. 
+We implement our model in Stan and assume weakly informative priors on all parameters, with prior for $\tau$ centered at 1 death per 10,000 cases. 
 
 ```
 model {
@@ -91,25 +90,19 @@ model {
 
 # Data on age-specific mortality risk
 
-We used estimates originally collected by @levin_assessing_2020 to construct the first version of analysis dataset, which we then supplemented with more values extracted from other studies. __Write-up of data collection here.__ The input data into our model consists of deaths (treated as known) and prevalences (treated as logit-distributed parameter with known mean and SD) in all reported age groups in all studies^[This basic approach exaggerates uncertainty, as we treat different 95% intervals reported in the study as uncorrelated.]. All of input data are reported in Table \@ref(tab:input-data-tab).
-
-We made only minimal modifications to source data, by 1) imputing the values in Italian study (__David to describe__?), 2) imputing population size in Maranhao (as ratio of the reported number of infections and the mean infection rate) which were not reported and 3) assuming that uncertainty in prevalence 0-29 age group in Iceland is same as in the 30-39 age group since data were missing.
-
-Our model treats number of Covid-attributable deaths as measured without error (due to lack of data) but accounts for uncertainty in infection rates, which are always model-based estimated extracted from various available data sources. We assume that logits of prevalence estimates from available studies are normally distributed, which seems to reproduce almost all of data perfectly, see Figure \@ref(prevalence-data) in the Supplement.
-
 ```{r read-data, eval = F}
 # Several different datasets.
-NBER_IFR_Benchmark_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xlsx',1)
+NBER_IFR_Benchmark_Studies <- read_excel('data/NBER_IFR_Meta_Dataset.xlsx',1)
 #Places: Belgium. Geneva, Indiana, New York, Spain, Sweden
-NBER_IFR_US_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xlsx',2, skip=1)
+NBER_IFR_US_Studies <- read_excel('data/NBER_IFR_Meta_Dataset.xlsx',2, skip=1)
 names(NBER_IFR_US_Studies)[6:7]<-c('Infect 95_lower','Infect 95_upper')
 names(NBER_IFR_US_Studies)[10:11]<-c('IFR_95_lower','IFR_95_upper')
 
-# NBER_All_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xls',5)
+# NBER_All_Studies <- read_excel('data/NBER_IFR_Meta_Dataset.xls',5)
 ```
 
 ```{r read-joint-data}
-all_data_xls <- read_excel("Study Summary Data/1DS_Meta_Dataset_ww.xls") %>%
+all_data_xls <- read_excel("data/1DS_Meta_Dataset_ww.xls") %>%
                            # col_types = c("text", "text", "date", "date", rep("text", 4), "numeric", "text", rep("numeric", 11))) %>%
   rename(Study = StudyName) %>%
   # Use imputed deaths and population sizes where neeeded
@@ -160,9 +153,6 @@ df <- ifr_joint %>%
   filter(!is.na(Deaths), !is.na(logit_sd), !is.na(logit_mean), !is.na(Population))
 ```
 
-
-
-
 ```{r}
 df_age <- df %>% mutate(age = gsub("\\+", "-Inf", AgeGroup)) %>%
   separate(age, c("ageMin", "ageMax")) %>%
@@ -170,7 +160,19 @@ df_age <- df %>% mutate(age = gsub("\\+", "-Inf", AgeGroup)) %>%
 good_data_pts <- sum(df_age$ageMin < 30 & df_age$ageMax > 20)
 ```
 
-Our construction of age variable and use of all available data (rather than the subset of data available in younger adults only) is necessitated by data limitations: out of `r nrow(df_age)` data points comprising age-specific estimates of prevalence (or IFR) and counts of deaths, `r good_data_pts` contain individuals aged 20-30 who are of primary interest to us. However, the populations are mixed with regards to age, with typical age groupings such as 19-49, 20-49, 20-39, 0-49 used instead. In fact, we find only one estimate out of `r good_data_pts` that is entirely specific to the 20-29 age group (Brazilian state of Maranhao). 
+We used estimates originally collected by @levin_assessing_2020 to construct the first version of analysis dataset, which we then supplemented with more values extracted from other studies. __Write-up of data collection here.__ The input data into our model consists of deaths (treated as known) and prevalences (treated as logit-distributed parameter with known mean and SD) in all reported age groups in all studies^[This basic approach exaggerates uncertainty, as we treat different 95% intervals reported in the study as uncorrelated.]. 
+
+```{r}
+data_ns <- df %>% group_by(Study) %>% tally() %>% pull(n)
+```
+
+All of input data are given in Table \@ref(tab:input-data-tab). The analysis dataset contains `r nrow(df)` data points from `r length(data_ns)` studies, each containing between `r min(data_ns)` and `r max(data_ns)` different age groups. We made only minimal modifications to source data, by 1) imputing the values in Italian study (__David to describe__?), 2) imputing population size in Maranhao (as ratio of the reported number of infections and the mean infection rate) which were not reported and 3) assuming that uncertainty in prevalence 0-29 age group in Iceland is same as in the 30-39 age group since data were missing.
+
+Our model treats number of Covid-attributable deaths as measured without error (due to lack of data) but accounts for uncertainty in infection rates, which are always model-based estimated extracted from various available data sources. We assume that logits of prevalence estimates from available studies are normally distributed, which seems to reproduce majority of data perfectly, see Figure \@ref(fig:prevalence-data) in the Supplement.
+
+For each study we construct a median age scalar defined as __David to detail this: for now leaving blank as it might change with sensitivity analyses__.
+
+Our approach of regressing on the median age and use of all available data (rather than the subset of data available in younger adults only) is necessitated by data limitations: out of `r nrow(df_age)` data points comprising age-specific estimates of prevalence (or IFR) and counts of deaths, `r good_data_pts` contain individuals aged 20-30 who are of primary interest to us. However, the populations are mixed with regards to age, with typical age groupings such as 19-49, 20-49, 20-39, 0-49 used instead. In fact, we find only one estimate out of `r good_data_pts` that is entirely specific to the 20-29 age group (Brazilian state of Maranhao). 
 
 ```{r stan-data}
 mm <- model.matrix(ir ~ Study + Median_Age, data = df)
@@ -200,7 +202,7 @@ saveRDS(fit, file = "output/main_stan_model.rds")
 fit <- readRDS("output/main_stan_model.rds")
 ```
 
-There were no issues with convergence of the Bayesian model. We set number of iterations to 5,000 and used 4 chains, with `max_treedepth` option set to 15. There were no divergent transitions and effective sample size was greater than `r round(min(summary(fit)$summary[,"n_eff"]))` for all of `r length(summary(fit)$summary[,"n_eff"]) - 1` modeled parameters. For the three main parameters in the model we obtained the following:
+There were no issues with convergence of the Bayesian model. We set number of iterations to 5,000 and used 4 chains, with `max_treedepth` option set to 15. There were no divergent transitions and effective sample size was greater than `r round(min(summary(fit)$summary[,"n_eff"]))` for all of `r length(summary(fit)$summary[,"n_eff"]) - 1` modeled parameters (this number includes fitted prevalences, IFRs, $\theta$'s and their transformations into/from logit scales). For the three main parameters in the model we obtained the following:
 
 ```{r}
 
@@ -209,7 +211,7 @@ print(fit, c("tau", "sigma", "beta"))
 
 The mean coefficient of beta `r round(mean(c(as.matrix(fit, "beta[1]"))), 2)` corresponds to `r mean(exp(mean(c(as.matrix(fit, "beta[1]")))))`-fold increase in mortality risk following an infection per each extra decade of age (95% uncertainty interval is `r paste(round(quantile(exp((c(as.matrix(fit, "beta[1]")))), c(.025, .975)),2),collapse = "-")`).
 
-From these parameters we can predict average risks for subjects of any given age $x$, by using the posterior distribution of $\tau + (10x + 2.5) \beta$ (where 2.5 and 10 refer to the transformation we applied to `MedianAge` inputs).
+From these parameters we can predict average risks for subjects of any given age $x$, by using the posterior distribution of $\tau + (10x + 2.5) \beta$ (where 2.5 and 10 refer to the transformation that we applied to `MedianAge` inputs).
 
 
 
@@ -306,11 +308,11 @@ df_ifr <-
              df$Median_Age, 
              summary(fit, "ifr")$summary[, c("2.5%", "mean", "98%")]) %>% 
   setNames(c("age", "q025", "mean", "q975")) %>%
-  mutate(key = "ifr")
+  mutate(key = "Fitted IFR (95% interval)")
 
 ```
 
-```{r ifr-plot, fig.cap = "IFR as a function of age. Narrower ribbon corresponds to the 95% posterior interval of average across all included studies (tau parameter in the meta-analysis model), while the wider band takes into account heterogeneity (tau and sigma). Red points are model estimates of mean IFRs in partciular studies, with bars representing 95% posterior intervals. Panel A is untransformed data and panel B is same data on log 10 scale.", fig.height = 10, fig.width = 8}
+```{r ifr-plot, fig.cap = "IFR as a function of age. Narrower ribbon corresponds to the 95% posterior interval of average across all included studies (tau parameter in the meta-analysis model), while the wider band takes into account heterogeneity (tau and sigma). Lines are means. Red points are model estimates of mean IFRs in partciular studies, with bars representing 95% posterior intervals. Panel A is untransformed data and panel B is same data on log 10 scale.", fig.height = 10, fig.width = 8}
 
 
 gg <- df_rep %>% 
@@ -321,21 +323,24 @@ gg <- df_rep %>%
   gather(key, value, -age, -stat) %>%
   spread(stat, value) %>%
   mutate(key = factor(key, levels = c("mean", "rep"), 
-                      labels = c("Mean over included studies", 
-                                 "Replication (taking heterogeneity into account)"))) %>%
-  ggplot(aes(x=age, y = mean, ymin = q025, ymax = q975, fill = key, lty = key)) +
-  geom_ribbon(alpha = .75) +
-  geom_line() +
-  geom_point(data = df_ifr, color = "red") +
-  geom_errorbar(data = df_ifr, color = "red") +
+                      labels = c("Mean over included studies (tau + beta*x)", 
+                                 "Replication (N(tau + beta*x, sigma^2))"))) %>%
+  ggplot(aes(x=age, y = mean, ymin = q025, ymax = q975, lty = key, fill = key)) +
+  geom_ribbon(alpha = .25, fill = "black") +
+  geom_line(color = "black") +
+  geom_point(data = df_ifr, color = "red", show.legend=FALSE) +
+  geom_errorbar(data = df_ifr, color = "red", show.legend=FALSE) +
   scale_fill_grey() +
+  guides(fill = FALSE) +
   theme_minimal() +
   theme(legend.position = "bottom") +
+  guides(colour = FALSE) +
   ylab("Infection fatality rate") +
   coord_cartesian(xlim = c(0.1, 80), ylim = c(1e-6, .2))
 
-gridExtra::grid.arrange(grobs = list(gg + ggtitle("A"), 
-                                     gg + scale_y_log10() + ggtitle("B") + theme(legend.position = "none")), ncol = 1)
+gridExtra::grid.arrange(grobs = list(gg + ggtitle("A") + theme(legend.position = "none"), 
+                                     gg + scale_y_log10() + ggtitle("B")), 
+                        ncol = 1)
 ```
 
 ```{r}
@@ -355,7 +360,7 @@ gridExtra::grid.arrange(grobs = list(gg + ggtitle("A"),
 
 
 ```{r}
-open_safely <- read_excel("Study Summary Data/OpenSafely_Counts.xls")
+open_safely <- read_excel("data/OpenSafely_Counts.xls")
 
 stan_df <- open_safely %>% 
   filter(!is.na(Fatalities)) %>% 

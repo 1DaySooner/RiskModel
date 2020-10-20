@@ -20,13 +20,13 @@ __This is a simpler implementation of the model that is stored here for posterit
 
 ```{r, include = F}
 # Several different datasets.
-NBER_IFR_Benchmark_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xlsx',1)
+NBER_IFR_Benchmark_Studies <- read_excel('data/NBER_IFR_Meta_Dataset.xlsx',1)
 #Places: Belgium. Geneva, Indiana, New York, Spain, Sweden
-NBER_IFR_US_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xlsx',2, skip=1)
+NBER_IFR_US_Studies <- read_excel('data/NBER_IFR_Meta_Dataset.xlsx',2, skip=1)
 names(NBER_IFR_US_Studies)[6:7]<-c('Infect 95_lower','Infect 95_upper')
 names(NBER_IFR_US_Studies)[10:11]<-c('IFR_95_lower','IFR_95_upper')
 
-NBER_All_Studies <- read_excel('Study Summary Data/NBER_IFR_Meta_Dataset.xls',5)
+NBER_All_Studies <- read_excel('data/NBER_IFR_Meta_Dataset.xls',5)
 ```
 
 ```{r}

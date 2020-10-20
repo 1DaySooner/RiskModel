@@ -1,7 +1,7 @@
 library(tidyverse)
 library(readxl)
 library(rstan)
-open_safely <- read_excel("Study Summary Data/OpenSafely_Counts.xls")
+open_safely <- read_excel("data/OpenSafely_Counts.xls")
 # View(open_safely)
 
 # what are the risk ratios ?
