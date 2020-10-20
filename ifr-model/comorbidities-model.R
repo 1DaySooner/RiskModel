@@ -28,7 +28,9 @@ stan_data <- list(
   Nevents = stan_df$f)
 
 sm_como <- stan_model("rr_comorbidities.stan")
+sm_como_2 <- stan_model("rr_comorbidities_v2.stan")
 fit <- sampling(sm_como, data = stan_data, refresh = 0)
+fit2 <- sampling(sm_como_2, data = stan_data, refresh = 0)
 
 data.frame(
   stan_df,
@@ -41,3 +43,8 @@ data.frame(
   geom_point(aes(y = estimate), pch = 2) +
   geom_errorbar(aes(ymin = lci, ymax = uci)) +
   facet_grid(Healthy.Weight ~ No.Comorbidities)
+
+
+
+
+
