@@ -23,6 +23,7 @@ sm <- stan_model("ifr_with0.stan")
 options(mc.cores = 4, digits = 2)
 ```
 
+
 # Introduction
 
 This is a short document describing a Bayesian model for synthesising information on many infection fatality rates (IFRs) into a single estimate that can be made specific to certain age groups or adjusted by co-morbidity status. The analysis presented here is a form of Bayesian meta-analysis, in that our primary objective is to weigh sources of evidence in a way that captures both variability (heterogeneity across different settings) and uncertainty.
@@ -485,18 +486,46 @@ summary(fit_como, c("mu", "sigma", "alpha[3]", "beta", "gamma[3]"))$summary
 
 We find that the mean risk ratio between general population and healthy sub-population in 20-29 age group (exponent of $\alpha_3$) is `r mean(alpha_exp)`, with 95% interval from `r quantile(alpha_exp, .025)` to `r quantile(alpha_exp, .975)`. Please note that the uncertainty in this estimate is large (capturing our uncertainty about influence of data from the other age groups on RR in 20-29 age group), but less than in the estimate based purely on 20-29 year olds. ^[Using simple models that assumed identical risk ratios in all age groups would result in mean RR of 3 but much less uncertain estimate, due to more rigid model assumptions; similarly, assuming some linear age structure on risks such as in the main meta-analysis model above, would also lead to RR of about 3. We do not include outputs of these models in this short write-up.]
 
-```{r}
+We conducted a simple posterior predictive check for numbers of deaths in different age groups and genders. The graphical check is presented in Figure \@ref(fig:open-safely-ppc). Overall we find that the simple model has no problem with reproducing observed data.
+
+```{r open-safely-ppc, fig.width = 7, fig.height = 7, fig.cap = "Comparison of posterior predictive numbers of deaths from the fitted Bayesian model (mean and 95% intervals) with data inputs (circles). For each age grouping we have 4 estimates: male/female and healthy (`No.Comorbidities` equal to 1) vs general population (0)"}
 data.frame(  stan_df,
   lci = summary(fit_como, "Nevent_ppc")$summary[,"2.5%"],
   estimate = summary(fit_como, "Nevent_ppc")$summary[,"mean"],
   uci = summary(fit_como, "Nevent_ppc")$summary[,"98%"]) %>%
   # mutate(lci = log(lci), estimate = log(estimate), uci = log(uci)) %>%
-  ggplot(aes(x = interaction(Gender,No.Comorbidities), y = estimate, color = Gender)) + 
+  mutate(No.Comorbidities = factor(No.Comorbidities)) %>%
+  ggplot(aes(x = interaction(Gender,No.Comorbidities), y = estimate, 
+             color = Gender)) + 
   geom_point() +
   geom_point(aes(y = f), pch = 21) +
-  geom_errorbar(aes(ymin = lci, ymax = uci)) +
-  facet_wrap(~ Age_min, scales = "free")
+  geom_errorbar(aes(ymin = lci, ymax = uci, lty = No.Comorbidities), width = 0) +
+  facet_wrap(~ Age_min, scales = "free") +
+  xlab("") + ylab("N deaths")+
+  theme(legend.position = c(1, 0),
+        legend.justification = c(1, 0))
 ```
+
+
+# Conclusion and summary of results
+
+```{r}
+lci <- function(x, q=.95) quantile(x, (1-q)/2)
+uci <- function(x, q=.95) quantile(x,  1 - ((1-q)/2))
+# hyperifr
+# replications
+# alpha_exp
+theta_min <- inv_logit(as.matrix(fit, "theta_k")[,which.min(theta_mean)])
+final_ifr <- theta_min/alpha_exp
+```
+
+In conclusion:
+
+* We find that average IFR in 20-29 age group for the studies included in this analysis is `r mean(hyperifr)` with 95% interval from `r lci(hyperifr)` to `r uci(hyperifr)`.
+    + It is feasible that the mean IFR can be decreased as much as `r mean(exp(2*hypersd))`-fold ($2\sigma$ impact on the IFR according to hyper-SD parameter in the meta-analysis model). 
+    + It is easy to argue that a HCT designer would be able to achieve IFR at least as low as within any of the large-scale studies included in our sample of populations. The smallest posterior mean for 20-29 year olds is `r inv_logit(min(theta_mean))`, fitted to data from `r names(theta_mean)[which.min(theta_mean)]`.
+* Reduction possible from only analysing healthy population (defined as lack of co-morbidities listed above) is `r mean(alpha_exp)` with 95% interval from `r lci(alpha_exp)` to `r uci(alpha_exp)`. This estimate is obtained under a strong assumption that CFRs in general population are the same as in the healthy sub-population.
+* Combining the smallest posterior IFR for 20-29 year olds with our estimated fold-reduction due to excluding individuals with co-morbidities from the population would lead to a mean infection fatality risk of  `r mean(final_ifr)` with 95% Bayesian interval from `r lci(final_ifr)` to `r uci(final_ifr)`.
 
 
 \pagebreak
