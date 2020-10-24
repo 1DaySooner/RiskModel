@@ -39,7 +39,7 @@ To address these drivers of differences in observed IFRs we develop a Bayesian m
 
 # Evidence synthesis model
 
-What follows is an adaptation of typical methods of Bayesian evidence synthesis to analysis of IFRs. IFR is the ratio of deaths to infections in a given population. Early estimates, e.g. by @verity_estimates_2020, place it at over 0.6% globally. However, it's evident from data that IFR is orders of magnitude higher in particular high risk groups, especially in the elderly, than in the general population. Such relationship seems to be consistent across different countries.
+What follows is an adaptation of typical methods of Bayesian evidence synthesis to analysis of IFRs. IFR is the ratio of deaths to infections in a given population. Early estimates of Covid-19 mortality risk, e.g. by @verity_estimates_2020, placed it at over 0.6% globally. However, it's also evident from data that IFR is orders of magnitude higher in particular high risk groups, especially in the elderly, than in the general population. Such relationship seems to be consistent across different countries.
 
 We can use Bayesian meta-analysis models to account for the fact that different population studies at different times have different average probability of events. We use hierarchical modelling framework to assume that the context-specific estimates of $IFR_i$ (measured in different settings, with some uncertainty) are linked through some common parameters.
 
@@ -419,14 +419,14 @@ como_df %>%
 
 As shown in Table \@ref(tab:open-safely-tab), for the age group of 20-29 the crude risk ratio is 1.53, but, due to low number of events in both healthy and general population, with a very wide 95% interval from 0.6 to 5.65.^[We obtain the interval using a simulation approach. Using normal approximation of log(RR) statistic we obtain a narrower 0.57 to 4.1, perhaps due to poor quality of approximation for rare events.] As data on relative risks in other age groups is clearly related to the relative risk in 20-29 age group, we use another meta-analysis model to improve our estimate. Additionally, relative risks are higher in women than in men -- something that we can account for in our model too.
 
-In our modelling we make a strong assumption that infection rates in population with comorbidities are the same as in the general population. In other words, we assume that IFR is proportional to CFR in the same way in both populations. We then specify a generic partial pooling model of CFR such that
+In our modelling we make a strong assumption that infection rates in population with comorbidities are the same as in the general population. In other words, we assume that denominator for IFR is same in both populations. We then specify a generic partial pooling model of fatality rates (FR, defined as number of deaths in the entire population, without regards to infection status) such that
 
 \begin{align}
-\text{logit}(\text{CFR}_k) & \sim \mathcal{N}(\alpha_{\text{age}_k} \text{comorb}_k + \beta \text{male}_k + \gamma_{\text{age}_k}), \\
+\text{logit}(\text{FR}_k) & \sim \mathcal{N}(\alpha_{\text{age}_k} \text{comorb}_k + \beta \text{male}_k + \gamma_{\text{age}_k}), \\
 \alpha_i & \sim \mathcal{N}(\mu, \sigma) \text{ for all } i;
 \end{align}
 
-where, for $k$-th observation, $\text{age}_k$ is the age group, with each age group given different "baseline" CFR, and $\text{comorb}_k$ and $\text{male}_k$ are indicator variables.
+where, for $k$-th observation, $\text{age}_k$ is the age group, with each age group given different "baseline" fatality rates, and $\text{comorb}_k$ and $\text{male}_k$ are indicator variables.
 
 
 ```{r open-safely-tab}
@@ -443,7 +443,7 @@ como_df %>%
       booktabs = TRUE, 
       format.args = list(big.mark = ",")) %>%
   kable_styling() %>%
-  add_header_above(c(" " = 1, "Population" = 2, "Fatalities" = 2, "CFR per 100k" = 2, " " = 1))
+  add_header_above(c(" " = 1, "Population" = 2, "Fatalities" = 2, "FR per 100k" = 2, " " = 1))
 ```
 
 
@@ -524,7 +524,7 @@ In conclusion:
 * We find that average IFR in 20-29 age group for the studies included in this analysis is `r mean(hyperifr)` with 95% interval from `r lci(hyperifr)` to `r uci(hyperifr)`.
     + It is feasible that the mean IFR can be decreased as much as `r mean(exp(2*hypersd))`-fold ($2\sigma$ impact on the IFR according to hyper-SD parameter in the meta-analysis model). 
     + It is easy to argue that a HCT designer would be able to achieve IFR at least as low as within any of the large-scale studies included in our sample of populations. The smallest posterior mean for 20-29 year olds is `r inv_logit(min(theta_mean))`, fitted to data from `r names(theta_mean)[which.min(theta_mean)]`.
-* Reduction possible from only analysing healthy population (defined as lack of co-morbidities listed above) is `r mean(alpha_exp)` with 95% interval from `r lci(alpha_exp)` to `r uci(alpha_exp)`. This estimate is obtained under a strong assumption that CFRs in general population are the same as in the healthy sub-population.
+* Reduction possible from only analysing healthy population (defined as lack of co-morbidities listed above) is `r mean(alpha_exp)` with 95% interval from `r lci(alpha_exp)` to `r uci(alpha_exp)`. This estimate is obtained under a strong assumption that infection rates in general population are the same as in the healthy sub-population.
 * Combining the smallest posterior IFR for 20-29 year olds with our estimated fold-reduction due to excluding individuals with co-morbidities from the population would lead to a mean infection fatality risk of  `r mean(final_ifr)` with 95% Bayesian interval from `r lci(final_ifr)` to `r uci(final_ifr)`.
 
 
@@ -596,7 +596,7 @@ stan_df %>%
       booktabs = TRUE, 
       format.args = list(big.mark = ",")) %>%
   kable_styling() %>%
-  add_header_above(c(" " = 2, "Population" = 2, "Fatalities" = 2, "CFR per 100k" = 2, " " = 1)) %>%
+  add_header_above(c(" " = 2, "Population" = 2, "Fatalities" = 2, "FR per 100k" = 2, " " = 1)) %>%
   group_rows("Female", 1, 8) %>%
   group_rows("Male", 9, 16)
 ```
