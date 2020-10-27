@@ -113,7 +113,7 @@ deaths_mean <-
       Participants = input$num_participants,
       Age_Range = input$ages,
       gender = input$gender,
-      Therapy = 1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)),
+      Therapy = 1-((1-input$p_treatment)*(1-0.3*input$adjustment1)*(1-0.3*input$adjustment2)),
       Pctile = '50%',
       outcome = "death"
     )
@@ -125,7 +125,7 @@ hosp_mean <-
       Participants = input$num_participants,
       Age_Range = input$ages,
       gender = input$gender,
-      Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)),
+      Therapy =  1-((1-input$p_treatment)*(1-0.3*input$adjustment1)*(1-0.3*input$adjustment2)),
       Pctile = '50%',
       outcome = "hosp"
     )
@@ -145,7 +145,19 @@ renderValueBox({
 })
 ```
 
-### 95% Confidence, No Deaths {.value-box}
+### Probability of no hospitalizations during study {.value-box}
+```{r}
+
+renderValueBox({
+  out_mean <- basicFormatter(hosp_mean())
+  valueBox(
+    value = out_mean,
+    # icon = "icon_name"
+    color = muted("red")
+  )
+})
+```
+
 
 ```{r}
 deaths_95 <-
@@ -154,7 +166,7 @@ deaths_95 <-
       Participants = input$num_participants,
       Age_Range = input$ages,
       gender = input$gender,
-      Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)),
+      Therapy =  1-((1-input$p_treatment)*(1-0.3*input$adjustment1)*(1-0.3*input$adjustment2)),
       Pctile="95%",
       outcome = "death")
   )
@@ -165,18 +177,11 @@ hosp_95 <- #Needed later.
       Participants = input$num_participants,
       Age_Range = input$ages,
       gender = input$gender,
-      Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)),
+      Therapy =  1-((1-input$p_treatment)*(1-0.3*input$adjustment1)*(1-0.3*input$adjustment2)),
       Pctile="95%",
       outcome = "hosp")
   )
 
-
-renderValueBox({
-  risk <- basicFormatter(deaths_95())
-  valueBox(
-    value = risk
-  )
-})
 ```
 
 ### Micromorts {.value-box}
@@ -230,25 +235,25 @@ graph_risks <-
         Age_Range = input$ages,
         gender = input$gender,
         outcome = 'death',
-        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)), 
+        Therapy =  1-((1-input$p_treatment)*(1-0.3*input$adjustment1)*(1-0.3*input$adjustment2)), 
         Pctile = "50%"),
       IndivRiskPull(
         Age_Range = input$ages,
         gender = input$gender,
         outcome = 'hosp',
-        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)), 
+        Therapy =  1-((1-input$p_treatment)*(1-0.3*input$adjustment1)*(1-0.3*input$adjustment2)), 
         Pctile = "50%"),
       IndivRiskPull(
         Age_Range = input$ages,
         gender = input$gender,
         outcome = 'death',
-        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)), 
+        Therapy =  1-((1-input$p_treatment)*(1-0.3*input$adjustment1)*(1-0.3*input$adjustment2)), 
         Pctile = "95%"),
       IndivRiskPull(
         Age_Range = input$ages,
         gender = input$gender,
         outcome = 'hosp',
-        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)), 
+        Therapy =  1-((1-input$p_treatment)*(1-0.3*input$adjustment1)*(1-0.3*input$adjustment2)), 
         Pctile = "95%")
   )
   )
@@ -300,7 +305,7 @@ m_micromorts <-
         Age_Range = input$ages,
         gender = 'm',
         outcome = 'death',
-        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)), 
+        Therapy =  1-((1-input$p_treatment)*(1-0.3*input$adjustment1)*(1-0.3*input$adjustment2)), 
         Pctile = "50%"
       ) * 1000000
     )
@@ -313,7 +318,7 @@ f_micromorts <-
         Age_Range = input$ages,
         gender = 'f',
         outcome = 'death',
-        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)),
+        Therapy =  1-((1-input$p_treatment)*(1-0.3*input$adjustment1)*(1-0.3*input$adjustment2)),
         Pctile = "50%"
       ) * 1000000
     )
@@ -326,7 +331,7 @@ b_micromorts <-
         Age_Range = input$ages,
         gender = 'b',
         outcome = 'death',
-        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)),
+        Therapy =  1-((1-input$p_treatment)*(1-0.3*input$adjustment1)*(1-0.3*input$adjustment2)),
         Pctile = "50%"
       ) * 1000000
     )
