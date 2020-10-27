@@ -1,6 +1,6 @@
 ---
-title: "HCT Dashboard Beta"
-author: "Ben Choi"
+title: "HCT Dashboard Beta v0.5"
+author: "David Manheim"
 output:
   flexdashboard::flex_dashboard:
     orientation: rows
@@ -75,7 +75,24 @@ selectInput(
   c("20 to 29", "20 to 39"), 
   selected = "20 to 29"
 )
+
+checkboxInput(
+'adjustment1', 
+'Adjust for no comorbidities', 
+value = FALSE, 
+width = NULL
+)
+
+checkboxInput(
+'adjustment2', 
+'Adjust for best-case population', 
+value = FALSE, 
+width = NULL
+)
+
+
 ```
+
 
 <!-- Notice the ====== vs. -------. These just change how the page is divided up into sections vs. rows -->
 
@@ -96,7 +113,7 @@ deaths_mean <-
       Participants = input$num_participants,
       Age_Range = input$ages,
       gender = input$gender,
-      Therapy = input$p_treatment,
+      Therapy = 1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)),
       Pctile = '50%',
       outcome = "death"
     )
@@ -108,7 +125,7 @@ hosp_mean <-
       Participants = input$num_participants,
       Age_Range = input$ages,
       gender = input$gender,
-      Therapy = input$p_treatment,
+      Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)),
       Pctile = '50%',
       outcome = "hosp"
     )
@@ -137,7 +154,7 @@ deaths_95 <-
       Participants = input$num_participants,
       Age_Range = input$ages,
       gender = input$gender,
-      Therapy = input$p_treatment,
+      Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)),
       Pctile="95%",
       outcome = "death")
   )
@@ -148,7 +165,7 @@ hosp_95 <- #Needed later.
       Participants = input$num_participants,
       Age_Range = input$ages,
       gender = input$gender,
-      Therapy = input$p_treatment,
+      Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)),
       Pctile="95%",
       outcome = "hosp")
   )
@@ -213,25 +230,25 @@ graph_risks <-
         Age_Range = input$ages,
         gender = input$gender,
         outcome = 'death',
-        Therapy = input$p_treatment, 
+        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)), 
         Pctile = "50%"),
       IndivRiskPull(
         Age_Range = input$ages,
         gender = input$gender,
         outcome = 'hosp',
-        Therapy = input$p_treatment, 
+        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)), 
         Pctile = "50%"),
       IndivRiskPull(
         Age_Range = input$ages,
         gender = input$gender,
         outcome = 'death',
-        Therapy = input$p_treatment, 
+        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)), 
         Pctile = "95%"),
       IndivRiskPull(
         Age_Range = input$ages,
         gender = input$gender,
         outcome = 'hosp',
-        Therapy = input$p_treatment, 
+        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)), 
         Pctile = "95%")
   )
   )
@@ -283,7 +300,8 @@ m_micromorts <-
         Age_Range = input$ages,
         gender = 'm',
         outcome = 'death',
-        Therapy = input$p_treatment, Pctile = "50%"
+        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)), 
+        Pctile = "50%"
       ) * 1000000
     )
   )
@@ -295,7 +313,8 @@ f_micromorts <-
         Age_Range = input$ages,
         gender = 'f',
         outcome = 'death',
-        Therapy = input$p_treatment, Pctile = "50%"
+        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)),
+        Pctile = "50%"
       ) * 1000000
     )
   )
@@ -307,7 +326,8 @@ b_micromorts <-
         Age_Range = input$ages,
         gender = 'b',
         outcome = 'death',
-        Therapy = input$p_treatment, Pctile = "50%"
+        Therapy =  1-((1-input$p_treatment)*(0.3*input$adjustment1)*(0.3*input$adjustment2)),
+        Pctile = "50%"
       ) * 1000000
     )
   )
@@ -344,5 +364,5 @@ About Model
 <h3>Methodology</h3>
   The methodology for this alpha version of the risk model is to use the suite of modeling analyses and data from Salje et al. 2020 to simulate a number of infections chosen, for the study size, above. The simulation is stochastic, so larger samples will be more accurate, but require longer to run. This does not account for the lower risk due to screening out comorbidities, or any risks that differ between intentional exposure trials and natural exposure. It also assumes no rescue therapy is applied, and does not include the greater clinical success of current COVID-19 treatment compared to the treatment available between March and the beginning of May, the time period covered by the Salje et al. data.
   Note that this model is appropriate for considering a dosage trial. The size of such a trial may vary, but one approach would be to expose 5 volunteers each to 3 increasing titers of COVID-19, stopping if the majority or all volunteers for a given exposure level develop clinical disease. Following this, an additional 10-20 volunteers would be given the appropriate titer of COVID-19, to validate the initial result.
-  We also incorporate a (currently crude) adjustment for comorbidities, based on data from New York. 6.1% of all hospitalized patients are reported to have no comorbidities, per Richardson, et al. and 10% of fatailities in New York have no reported comorbidities, per the New York Dashboard.
+  We also incorporate a (currently crude) adjustment for comorbidities, based on initial results from the model. In comparison, 6.1% of all hospitalized patients are reported to have no comorbidities, per Richardson, et al. and 10% of fatalities in New York have no reported comorbidities, per the New York Dashboard.
   Salje, H., Kiem, C. T., Lefrancq, N., Courtejoie, N., Bosetti, P., Paireau, J., et al. & Le Strat, Y. (2020). Estimating the burden of SARS-CoV-2 in France. Science.",br("Richardson, S., Hirsch, J. S., Narasimhan, M., Crawford, J. M., McGinn, T., Davidson, K. W., et al. (2020). Presenting characteristics, comorbidities, and outcomes among 5700 patients hospitalized with COVID-19 in the New York City area. Jama.
