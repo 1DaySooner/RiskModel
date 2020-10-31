@@ -195,7 +195,8 @@ stan_data <- list(
 
 ```{r run-stan-model, eval = FALSE}
 fit <- sampling(sm, data = stan_data, control = list(max_treedepth = 15), 
-                iter = 5000, refresh = 0)
+                iter = 5000, refresh = 0,
+                pars = c("logit_ifr", "logit_prevalence"), include = FALSE)
 saveRDS(fit, file = "output/main_stan_model.rds")
 ```
 
@@ -374,7 +375,25 @@ stan_df <- open_safely %>%
   filter(`Healthy Weight` == 0) %>%
   mutate(f = ifelse(Fatalities == "<=5", "5", Fatalities)) %>%
   mutate(f = as.numeric(f)) %>%
-  mutate(p = f/Population) 
+  mutate(p = f/Population) %>%
+  select(-`Healthy Weight`, -Fatalities) %>%
+  rename(no_com = `No Comorbidities`)
+
+# Divide into healthy population and pop with comorbidities:
+open_safely_df_wide <- stan_df %>% 
+  select(-p) %>%
+  pivot_wider(names_from = no_com, values_from = c(Population, f)) %>%
+  mutate(n_como = Population_0 - Population_1,
+         f_como = f_0 - f_1) %>%
+  rename(n_healthy = Population_1, 
+         n_all = Population_0,
+         f_all = f_0,
+         f_healthy = f_1)
+
+open_safely_df_long <- open_safely_df_wide %>%
+  gather(group, value, -Age_min, -Age_max, -Gender) %>%
+  separate(group, sep = "_", c("stat", "group")) %>%
+  spread(stat, value)
 ```
 
 ```{r, eval = FALSE}
@@ -399,24 +418,26 @@ Data for this section has been provided by OpenSAFELY (<https://opensafely.org/>
 
 ```{r}
 como_df <- stan_df %>%
-  filter(`Healthy Weight` == 0) %>%
-  group_by(Age_min, `No Comorbidities`) %>%
+  group_by(Age_min, no_com) %>%
   summarise(p=sum(Population), f=sum(f), .groups = "keep") %>%
   mutate(m = f/p) 
 ```
 
-```{r open-safely-age, fig.width = 3, fig.height = 3, fig.cap = "Fatality rates as a function of age in OpenSAFELY data."}
-como_df %>%
-  rename(status = `No Comorbidities`) %>%
-  mutate(status = ifelse(status, 
-                                "No comorbidities", "All individuals")) %>%
+```{r open-safely-age, fig.width = 5, fig.height = 3, fig.cap = "Fatality rates as a function of age in OpenSAFELY data."}
+open_safely_df_long %>%
+  mutate(group = factor(group, levels = c("all", "como", "healthy"),
+                        labels = c("All", "With comorbidities", "W/o comorbidities"))) %>%
+  group_by(Age_min, group) %>%
+  summarise_if(is.numeric, sum) %>%
+  mutate(m = f/n) %>%
   ggplot(aes(x = Age_min + 5, y=log(m), 
-             group = status, color = status)) +
+             # group = status, 
+             color = group)) +
   geom_point() +
   geom_line() +
     xlab("Age") + ylab("log(fatality rate)") +
   theme_minimal() +
-  theme(legend.position = "bottom", legend.title = element_blank() )
+  theme(legend.position = "right", legend.direction = "vertical" )
 ```
 
 
@@ -434,13 +455,11 @@ where, for $k$-th observation, $\text{age}_k$ is the age group, and $\text{comor
 Note that the assumption of FRs varying across age groups that we just mentioned differs from the model of age-specific IFRs in Section 2. This is because we hypothesised that infection rates (which are used as denominators in the IFR model of Section 2) will vary across age groups. This is borne out by Figure \@ref(fig:open-safely-age). 
 
 ```{r open-safely-tab}
-
 como_df %>% 
   mutate(m = 1e05*m) %>%
   mutate(Age_min = paste(Age_min, "to", ifelse(Age_min == 70, "Inf", Age_min+9))) %>%
-  rename(nocom = `No Comorbidities`) %>% 
-  gather(key, value, -Age_min, -nocom) %>% 
-  pivot_wider(names_from = c(key, nocom), values_from = value) %>%
+  gather(key, value, -Age_min, -no_com) %>% 
+  pivot_wider(names_from = c(key, no_com), values_from = value) %>%
   mutate(rr = m_0/m_1) %>%
   kbl(col.names = c("Age group", "All", "Healthy", "All", "Healthy", "All", "Healthy", "RR"),
       caption = "Data from the OpenSAFELY database grouped by age.",
@@ -455,18 +474,20 @@ como_df %>%
 
 
 ```{r open-safely-stan-data, eval = T}
-stan_data <- list(
-  N = nrow(stan_df),
-  age = ifelse(stan_df$Age_min >= 20, (stan_df$Age_min - 20)/10, 0), #experimental
-  male = 1*(stan_df$Gender == "M"),
-  comorbidities = 1*(stan_df$`No Comorbidities` == 0),
-  overweight = 1*(stan_df$`Healthy Weight` == 0),
-  under20 = 1*(stan_df$Age_min < 20),
-  Npop = stan_df$Population,
-  Nevents = stan_df$f)
-
-stan_data$age_group <- stan_df$Age_min/10 + 1
-stan_data$Nages <- max(stan_df$Age_min/10 + 1)
+stan_data <- 
+  open_safely_df_long %>%
+  filter(group != "all") %>% 
+  with(list(
+    N = nrow(.),
+    # age = ifelse(stan_df$Age_min >= 20, (stan_df$Age_min - 20)/10, 0), #experimental
+    # under20 = 1*(stan_df$Age_min < 20),
+    age_group = as.numeric(factor(Age_min)), #experimental
+    male = 1*(Gender == "M"),
+    comorbidities = 1*(group == "como"),
+    Npop = n,
+    Nevents = f,
+    Nages = max(Age_min/10 + 1))
+  )
 ```
 
 ```{r, eval = FALSE}
@@ -477,33 +498,62 @@ stan_data$Nages <- max(stan_df$Age_min/10 + 1)
 sm_como5 <- stan_model("rr_comorbidities_v5.stan")
 fit_como5 <- sampling(sm_como5, data = stan_data, 
                       refresh = 0, iter = 5000, control = list(adapt_delta = .99, max_treedepth = 15))
-saveRDS(fit_como5, file = "output/como_stan_model.rds")
+saveRDS(fit_como5, file = "output/como_stan_model_v6.rds")
 ```
 
 Summary of the main model parameters is as follows:
 
 ```{r}
-fit_como <- readRDS(file = "output/como_stan_model.rds")
+fit_como <- readRDS(file = "output/como_stan_model_v6.rds")
 alpha_exp <- exp(rstan::extract(fit_como, "alpha[3]")[[1]])
 summary(fit_como, c("mu", "sigma", "alpha[3]", "beta", "gamma[3]"))$summary
 ```
+```{r}
+rr_df_all <- rstan::extract(fit_como, "theta")[[1]] %>% 
+  as.data.frame() %>% setNames(1:32) %>% 
+  mutate(sim = 1:n()) %>%
+  gather(id, value, -sim) %>% 
+  mutate(id = as.numeric(id)) %>%
+  left_join(open_safely_df_long %>% 
+              filter(group != "all") %>% 
+              mutate(id = 1:n()), by = "id") %>%
+  select(-id, -f) %>%
+  pivot_wider(names_from = c(group, Gender), values_from = c(value,n)) %>% 
+  mutate(theta_all = (n_como_F*value_como_F + n_como_M*value_como_M +
+                        n_healthy_M*value_healthy_M + 
+                        n_healthy_F*value_healthy_F)/(n_como_M + n_como_F + n_healthy_M + n_healthy_F),
+         theta_healthy = (n_healthy_M*value_healthy_M + 
+                        n_healthy_F*value_healthy_F)/(n_healthy_M + n_healthy_F)) %>%
+  mutate(rr = theta_all/theta_healthy) 
 
-We find that the mean risk ratio between general population and healthy sub-population in 20-29 age group (exponent of $\alpha_3$) is `r mean(alpha_exp)`, with 95% interval from `r quantile(alpha_exp, .025)` to `r quantile(alpha_exp, .975)`. Please note that the uncertainty in this estimate is large (capturing our uncertainty about influence of data from the other age groups on RR in 20-29 age group), but less than in the estimate based purely on 20-29 year olds. ^[Using simple models that assumed identical risk ratios in all age groups would result in mean RR of 3 but much less uncertain estimate, due to more rigid model assumptions; similarly, assuming some linear age structure on risks such as in the main meta-analysis model above, would also lead to RR of about 3. We do not include outputs of these models in this short write-up.]
+rr_healthy <- rr_df_all$rr[rr_df_all$Age_min == 20]
 
-We conducted a simple posterior predictive check for numbers of deaths in different age groups and genders. The graphical check is presented in Figure \@ref(fig:open-safely-ppc). Overall we find that the simple model has no problem with reproducing observed data.
+rr_df <- rr_df_all %>%
+  group_by(Age_min) %>%
+  summarise(mean = mean(rr), lci = quantile(rr, .025), uci = quantile(rr, .975), 
+            .groups = "keep") %>%
+  column_to_rownames("Age_min")
+```
 
-```{r open-safely-ppc, fig.width = 7, fig.height = 7, fig.cap = "Comparison of posterior predictive numbers of deaths from the fitted Bayesian model (mean and 95% intervals) with data inputs (circles). For each age grouping we have 4 estimates: male/female and healthy (`No.Comorbidities` equal to 1) vs general population (0)"}
-data.frame(  stan_df,
-  lci = summary(fit_como, "Nevent_ppc")$summary[,"2.5%"],
-  estimate = summary(fit_como, "Nevent_ppc")$summary[,"mean"],
-  uci = summary(fit_como, "Nevent_ppc")$summary[,"98%"]) %>%
+We find that the mean risk ratio between population with comorbidities and healthy sub-population in 20-29 age group (exponent of $\alpha_3$ above) is `r mean(alpha_exp)`, with wide 95% uncertainty interval of `r quantile(alpha_exp, .025)` to `r quantile(alpha_exp, .975)`.^[Using simple models that assumed identical risk ratios in all age groups would lead to a mean RR of similar magnitude but a much less uncertain estimate, due to more rigid model assumptions; similarly, assuming some linear age structure on risks, such as in the main meta-analysis model above, would may lead to a different RR, but we do not think such an assumption is justified here. We do not include outputs of these models in this short write-up.]
+
+Next, using the posterior samples we calculate the event rate in total population (i.e. $\theta\ast = (\theta_1 n_1 + \theta_2 n_2)/(n_1+n_2)$, where subscripts 1 and 2 are healthy and comorbid sub-populations) and then divide it by ratio in healthy population to obtain an estimate of risk reduction possible by selecting healthy volunteers only. The mean posterior value is `r rr_df["20","mean"]`, with 95% uncertainty interval from `r rr_df["20", "lci"]` to `r rr_df["20", "uci"]`. Due to use of Bayesian hierarchical model over many age groups, the uncertainty interval is much narrower than on the risk reduction factor calculated on 20-29 age group only.
+
+To validate the model, we conducted a simple posterior predictive check for numbers of deaths in different age groups and genders. The graphical check is presented in Figure \@ref(fig:open-safely-ppc). Overall we find that the simple model has no problem with reproducing observed data.
+
+```{r open-safely-ppc, fig.width = 8, fig.height = 7, fig.cap = "Comparison of posterior predictive numbers of deaths from the fitted Bayesian model (mean and 95% intervals) with data inputs (circles). For each age grouping we have 4 estimates: male/female and healthy (`No.Comorbidities` equal to 1) vs general population (0)"}
+open_safely_df_long %>%
+  filter(group != "all") %>% 
+  mutate(lci = summary(fit_como, "Nevent_ppc")$summary[,"2.5%"],
+         estimate = summary(fit_como, "Nevent_ppc")$summary[,"mean"],
+         uci = summary(fit_como, "Nevent_ppc")$summary[,"98%"]) %>%
   # mutate(lci = log(lci), estimate = log(estimate), uci = log(uci)) %>%
-  mutate(No.Comorbidities = factor(No.Comorbidities)) %>%
-  ggplot(aes(x = interaction(Gender,No.Comorbidities), y = estimate, 
+  mutate(group = ifelse(group == "como", "With comorbidities", "Healthy")) %>%
+  ggplot(aes(x = interaction(Gender,group), y = estimate, 
              color = Gender)) + 
   geom_point() +
   geom_point(aes(y = f), pch = 21) +
-  geom_errorbar(aes(ymin = lci, ymax = uci, lty = No.Comorbidities), width = 0) +
+  geom_errorbar(aes(ymin = lci, ymax = uci, lty = group), width = 0) +
   facet_wrap(~ Age_min, scales = "free") +
   xlab("") + ylab("N deaths")+
   theme(legend.position = c(1, 0),
@@ -518,11 +568,8 @@ data.frame(  stan_df,
 ```{r}
 lci <- function(x, q=.95) quantile(x, (1-q)/2)
 uci <- function(x, q=.95) quantile(x,  1 - ((1-q)/2))
-# hyperifr
-# replications
-# alpha_exp
 theta_min <- inv_logit(as.matrix(fit, "theta_k")[,which.min(theta_mean)])
-final_ifr <- theta_min/alpha_exp
+final_ifr <- theta_min/rr_healthy
 ```
 
 In conclusion:
@@ -530,11 +577,19 @@ In conclusion:
 * We find that average IFR in 20-29 age group for the studies included in this analysis is `r mean(hyperifr)` with 95% interval from `r lci(hyperifr)` to `r uci(hyperifr)`.
     + It is feasible that the mean IFR can be decreased as much as `r mean(exp(2*hypersd))`-fold ($2\sigma$ impact on the IFR according to hyper-SD parameter in the meta-analysis model). 
     + It is easy to argue that a HCT designer would be able to achieve IFR at least as low as within any of the large-scale studies included in our sample of populations. The smallest posterior mean for 20-29 year olds is `r inv_logit(min(theta_mean))`, fitted to data from `r names(theta_mean)[which.min(theta_mean)]`.
-* Reduction possible from only analysing healthy population (defined as lack of co-morbidities listed above) is `r mean(alpha_exp)` with 95% interval from `r lci(alpha_exp)` to `r uci(alpha_exp)`. 
-    + This estimate is obtained under a strong assumption that infection rates in general population are the same as in the healthy sub-population.
-    + Our `r mean(alpha_exp)` estimate is much higher than the mean "crude" risk ratio of 1.53 which we would obtain by looking at 20-29 age group only, but is consistent with that (very uncertain) estimate.
+* In healthy population (defined as lack of co-morbidities listed above), the average mortality risk is `r rr_df["20","mean"]` times lower than in the general population, with 95% uncertainty interval from `r rr_df["20", "lci"]` to `r rr_df["20", "uci"]`.
+    + Our `r rr_df["20","mean"]` estimate is a bit higher than the mean "crude" risk ratio of 1.53 because we use Bayesian hierarchical model. 
 * Combining the smallest posterior IFR for 20-29 year olds with our estimated fold-reduction due to excluding individuals with co-morbidities from the population would lead to a mean infection fatality risk of  `r mean(final_ifr)` with 95% Bayesian interval from `r lci(final_ifr)` to `r uci(final_ifr)`.
 
+```{r output-csv}
+csv_df <- data.frame(replications, #replications for mean IFR in 20-30 (takes into account heterogeneity) 
+                     inv_logit(hypermean),   #posterior mean for IFR in 20-30 (mean over included studies)
+                     theta_min,    #lowest estimated posterior IFR in 20-30 (in this case in Belgium)
+                     rr_healthy,   #ratio of mortality in healthy to general population
+                     final_ifr)    #theta_min/rr_healthy
+
+write.csv(csv_df, file = "output/bayesian-posteriors-shiny.csv")
+```
 
 \pagebreak
 
@@ -588,13 +643,12 @@ kbl(df_tab,  longtable = TRUE, booktabs = TRUE,
 
 ```{r open-safely-all}
 stan_df %>%
-  filter(`Healthy Weight` == 0) %>%
-  group_by(Age_min, `No Comorbidities`, Gender) %>%
+  group_by(Age_min, no_com, Gender) %>%
   summarise(p=sum(Population), f=sum(f), .groups = "keep") %>%
   mutate(m = f/p) %>%
   mutate(m = 1e05*m) %>%
   mutate(Age_min = paste(Age_min, "to", ifelse(Age_min == 70, "Inf", Age_min+9))) %>%
-  rename(nocom = `No Comorbidities`) %>% 
+  rename(nocom = no_com) %>% 
   gather(key, value, -Age_min, -nocom, -Gender) %>% 
   pivot_wider(names_from = c(key, nocom), values_from = value) %>%
   arrange(Gender) %>%
