@@ -1,5 +1,5 @@
 ---
-title: "Bayesian evidence synthesis on COVID-19 mortality risk in HCT volunteers"
+title: "Bayesian model of COVID-19 mortality risk in HCT volunteers"
 author: "Witold Więcek for 1 Day Sooner"
 date: "Last updated `r Sys.Date()`"
 output: 
@@ -220,10 +220,11 @@ From these parameters we can predict average risks for subjects of any given age
 ## Average infection fatality risk in young subjects
 
 ```{r}
-hypermean <- (rstan::extract(fit, "tau")[[1]])
-hypersd <- (rstan::extract(fit, "sigma")[[1]])
-nsamples <- length(hypermean)
-hyperifr <- inv_logit(hypermean)
+hypermean    <- (rstan::extract(fit, "tau")[[1]])
+hypersd      <- (rstan::extract(fit, "sigma")[[1]])
+beta         <- (rstan::extract(fit, "beta")[[1]])
+nsamples     <- length(hypermean)
+hyperifr     <- inv_logit(hypermean)
 replications <- inv_logit(rnorm(nsamples, hypermean, hypersd))
 ```
 
@@ -268,7 +269,7 @@ df_cov <- data.frame(study = df$Study,
 
 We constructed posterior predictive distributions for number of deaths in each of the inputs by using the `generated quantities` functionality of Stan. Figure \@ref(fig:obs-est-deaths) compares the posterior means and 95% intervals with observed deaths. Out of `r df_cov$n` observations that were used to fit the model, `r df_cov$coverage975` were within 95% intervals of the posterior predictive distributions. We observed the largest discrepancies occurred in Spanish data. Overall, we conclude that the simple binomial model we used here is flexible enough to capture both age-specific risk increases and heterogeneity in IFRs across settings/countries. 
 
-```{r obs-est-deaths, fig.width = 10, fig.height = 10, fig.cap = "Comparison of model estimates (black) with observed mortality (red), compared on logarithmic scale. Bars are 95% posterior interval; point is the mean. For better clarity, we grouped the plot into four panels according to observed mortality. X axes on each panel differ. For many low-risk populations no deaths were reported: we indicate this by plotting a red point on the left-hand side of the panel plot.", warning = FALSE}
+```{r obs-est-deaths, fig.width = 10, fig.height = 10, fig.cap = "Comparison of model estimates (black) with data on observed fatality rate (FR, red), compared on logarithmic scale. FR is number of deaths divided by overall population size. Bars are 95% posterior interval; point is the mean. For better clarity, we grouped the plot into four panels according to observed FR X axes on each panel differ. For many low-risk populations (upper-left quadrant) no deaths were reported: we indicate this by plotting a red point on the left-hand side of the panel plot.", warning = FALSE}
 data.frame(study = df$Study, 
            age = df$AgeGroup,
            observed = df$Deaths,
@@ -282,7 +283,7 @@ data.frame(study = df$Study,
   geom_point(aes(x = observed), color = "red") + 
   facet_wrap(~deaths_cut, ncol = 2, scales = "free") +
   scale_x_log10() +
-  xlab("Covid-attributable mortality") + ylab("")
+  xlab("Covid-attributable fatality rate") + ylab("")
 ```
 
 ```{r}
@@ -314,7 +315,7 @@ df_ifr <-
 
 ```
 
-```{r ifr-plot, fig.cap = "IFR as a function of age. Narrower ribbon corresponds to the 95% posterior interval of average across all included studies (tau parameter in the meta-analysis model), while the wider band takes into account heterogeneity (tau and sigma). Lines are means. Red points are model estimates of mean IFRs in partciular studies, with bars representing 95% posterior intervals. Panel A is untransformed data and panel B is same data on log 10 scale.", fig.height = 10, fig.width = 8}
+```{r ifr-plot, fig.cap = "IFR as a function of age. Narrower ribbon corresponds to the 95% posterior interval of average across all included studies (tau parameter in the meta-analysis model), while the wider band takes into account heterogeneity (tau and sigma). Lines are means. Red points are model estimates of mean IFRs in partciular studies, with bars representing 95% posterior intervals. Panel A is untransformed data. Panel B shows the same data on log 10 scale.", fig.height = 10, fig.width = 8}
 
 
 gg <- df_rep %>% 
@@ -335,7 +336,7 @@ gg <- df_rep %>%
   scale_fill_grey() +
   guides(fill = FALSE) +
   theme_minimal() +
-  theme(legend.position = "bottom") +
+  theme(legend.position = "bottom", legend.title = element_blank()) +
   guides(colour = FALSE) +
   ylab("Infection fatality rate") +
   coord_cartesian(xlim = c(0.1, 80), ylim = c(1e-6, .2))
@@ -423,21 +424,23 @@ como_df <- stan_df %>%
   mutate(m = f/p) 
 ```
 
-```{r open-safely-age, fig.width = 5, fig.height = 3, fig.cap = "Fatality rates as a function of age in OpenSAFELY data."}
+```{r open-safely-age, fig.width = 5, fig.height = 3, warning = F, fig.cap = "Fatality rates as a function of age in OpenSAFELY data. Fatality rate is zero in the 0-10 and 10-20 age groups."}
 open_safely_df_long %>%
   mutate(group = factor(group, levels = c("all", "como", "healthy"),
                         labels = c("All", "With comorbidities", "W/o comorbidities"))) %>%
   group_by(Age_min, group) %>%
   summarise_if(is.numeric, sum) %>%
   mutate(m = f/n) %>%
-  ggplot(aes(x = Age_min + 5, y=log(m), 
+  ggplot(aes(x = Age_min + 5, y=m, 
              # group = status, 
              color = group)) +
   geom_point() +
   geom_line() +
-    xlab("Age") + ylab("log(fatality rate)") +
+    xlab("Age") + ylab("Fatality rate") +
   theme_minimal() +
-  theme(legend.position = "right", legend.direction = "vertical" )
+  scale_y_log10() +
+  theme(legend.position = "right", legend.direction = "vertical", 
+        legend.title = element_blank())
 ```
 
 
@@ -508,6 +511,7 @@ fit_como <- readRDS(file = "output/como_stan_model_v6.rds")
 alpha_exp <- exp(rstan::extract(fit_como, "alpha[3]")[[1]])
 summary(fit_como, c("mu", "sigma", "alpha[3]", "beta", "gamma[3]"))$summary
 ```
+
 ```{r}
 rr_df_all <- rstan::extract(fit_como, "theta")[[1]] %>% 
   as.data.frame() %>% setNames(1:32) %>% 
@@ -541,7 +545,7 @@ Next, using the posterior samples we calculate the event rate in total populatio
 
 To validate the model, we conducted a simple posterior predictive check for numbers of deaths in different age groups and genders. The graphical check is presented in Figure \@ref(fig:open-safely-ppc). Overall we find that the simple model has no problem with reproducing observed data.
 
-```{r open-safely-ppc, fig.width = 8, fig.height = 7, fig.cap = "Comparison of posterior predictive numbers of deaths from the fitted Bayesian model (mean and 95% intervals) with data inputs (circles). For each age grouping we have 4 estimates: male/female and healthy (`No.Comorbidities` equal to 1) vs general population (0)"}
+```{r open-safely-ppc, fig.width = 8, fig.height = 7, fig.cap = "Comparison of posterior predictive numbers of deaths from the fitted Bayesian model (mean and 95% uncertainty intervals) with data inputs (circles). For each age grouping we have 4 estimates: male/female and healthy vs general population"}
 open_safely_df_long %>%
   filter(group != "all") %>% 
   mutate(lci = summary(fit_como, "Nevent_ppc")$summary[,"2.5%"],
@@ -549,6 +553,7 @@ open_safely_df_long %>%
          uci = summary(fit_como, "Nevent_ppc")$summary[,"98%"]) %>%
   # mutate(lci = log(lci), estimate = log(estimate), uci = log(uci)) %>%
   mutate(group = ifelse(group == "como", "With comorbidities", "Healthy")) %>%
+  mutate(Age_min = paste(Age_min, "to", ifelse(Age_min == 70, "Inf", Age_min+9))) %>%
   ggplot(aes(x = interaction(Gender,group), y = estimate, 
              color = Gender)) + 
   geom_point() +
@@ -556,8 +561,10 @@ open_safely_df_long %>%
   geom_errorbar(aes(ymin = lci, ymax = uci, lty = group), width = 0) +
   facet_wrap(~ Age_min, scales = "free") +
   xlab("") + ylab("N deaths")+
+  theme_minimal() +
   theme(legend.position = c(1, 0),
-        legend.justification = c(1, 0))
+        legend.justification = c(1, 0),
+        axis.text.x = element_blank())
 ```
 
 
@@ -568,27 +575,57 @@ open_safely_df_long %>%
 ```{r}
 lci <- function(x, q=.95) quantile(x, (1-q)/2)
 uci <- function(x, q=.95) quantile(x,  1 - ((1-q)/2))
-theta_min <- inv_logit(as.matrix(fit, "theta_k")[,which.min(theta_mean)])
-final_ifr <- theta_min/rr_healthy
+# theta_min <- inv_logit(as.matrix(fit, "theta_k")[,which.min(theta_mean)])
+# final_ifr <- theta_min/rr_healthy
+
+# This uses fit and theta_mean objects defined above
+output_df <- data.frame(
+  # Stan model parameters (on logit scale)
+  hypermean    = (rstan::extract(fit, "tau")[[1]]),
+  hypersd      = (rstan::extract(fit, "sigma")[[1]]),
+  beta         = (rstan::extract(fit, "beta")[[1]]), #effect per extra decade of age
+  # Lowest theta in our sample: 
+  # i.e. smallest fitted logit IFR (currently it's Belgium)
+  theta_min    = (as.matrix(fit, "theta_k")[,which.min(theta_mean)]),
+  # RR parameters from OpenSAFELY model (see derivation above)
+  #ratio of mortality in healthy to general population
+  rr_healthy_25 = rr_df_all$rr[rr_df_all$Age_min == 20],   
+  rr_healthy_35 = rr_df_all$rr[rr_df_all$Age_min == 30]
+) %>%
+  mutate(
+    rr_healthy_30   = rr_healthy_25/2 + rr_healthy_35/2, #weighted mean of 2 age groups
+    # For each quantity we derive first using median of 25 years, then of 30 years
+    hyperifr_25     = inv_logit(hypermean),
+    hyperifr_30     = inv_logit(hypermean + .5*beta),
+    replications_25 = inv_logit(rnorm(nsamples, hypermean, hypersd)),
+    replications_30 = inv_logit(rnorm(nsamples, hypermean + .5*beta, hypersd)),
+    ifr_min_25      = inv_logit(theta_min),
+    ifr_min_30      = inv_logit(theta_min + .5*beta)
+  ) %>%
+  mutate(
+    final_ifr_25 = ifr_min_25/rr_healthy_25,
+    final_ifr_30 = ifr_min_30/rr_healthy_30
+  )
+
+attach(output_df, warn.conflicts = FALSE)
+# summary(output_df)
+
 ```
 
-In conclusion:
+In conclusion, the implications of the model for risk in healthy young subjects are as follows:
 
-* We find that average IFR in 20-29 age group for the studies included in this analysis is `r mean(hyperifr)` with 95% interval from `r lci(hyperifr)` to `r uci(hyperifr)`.
+* We find that average IFR in 20-29 age group for the studies included in this analysis is `r mean(hyperifr_25)` with 95% interval from `r lci(hyperifr_25)` to `r uci(hyperifr_25)`.
     + It is feasible that the mean IFR can be decreased as much as `r mean(exp(2*hypersd))`-fold ($2\sigma$ impact on the IFR according to hyper-SD parameter in the meta-analysis model). 
     + It is easy to argue that a HCT designer would be able to achieve IFR at least as low as within any of the large-scale studies included in our sample of populations. The smallest posterior mean for 20-29 year olds is `r inv_logit(min(theta_mean))`, fitted to data from `r names(theta_mean)[which.min(theta_mean)]`.
-* In healthy population (defined as lack of co-morbidities listed above), the average mortality risk is `r rr_df["20","mean"]` times lower than in the general population, with 95% uncertainty interval from `r rr_df["20", "lci"]` to `r rr_df["20", "uci"]`.
-    + Our `r rr_df["20","mean"]` estimate is a bit higher than the mean "crude" risk ratio of 1.53 because we use Bayesian hierarchical model. 
-* Combining the smallest posterior IFR for 20-29 year olds with our estimated fold-reduction due to excluding individuals with co-morbidities from the population would lead to a mean infection fatality risk of  `r mean(final_ifr)` with 95% Bayesian interval from `r lci(final_ifr)` to `r uci(final_ifr)`.
+    + Extending the HCT population to also include 30-39 year olds would lead to mean IFR of `r mean(hyperifr_30)` with 95% interval from `r lci(hyperifr_30)` to `r uci(hyperifr_30)`. Lowest mean IFR would then be `r mean(ifr_min_30)` (also in `r names(theta_mean)[which.min(theta_mean)]`).
+* In healthy population (defined as lack of co-morbidities listed above), the average mortality risk in 20-29 year olds is `r mean(rr_healthy_25)` times lower than in the general population, with 95% uncertainty interval from `r lci(rr_healthy_25)` to `r uci(rr_healthy_25)`.
+    + Our `r mean(rr_healthy_25)` estimate is a bit higher than the mean "crude" risk ratio of 1.53 because we use Bayesian hierarchical model. 
+    + Expanding to 20-39 year olds, the risk in healthy sub-population would be `r mean(rr_healthy_30)` times lower than in the general population (95% interval from `r lci(rr_healthy_25)` to `r uci(rr_healthy_25)`).
+* Combining the smallest posterior IFR for 20-29 year olds with our estimated fold-reduction due to excluding individuals with co-morbidities from the population would lead to a mean infection fatality risk of  `r mean(final_ifr_25)` with 95% Bayesian interval from `r lci(final_ifr_25)` to `r uci(final_ifr_25)`.
+    + In 20-39 year old subjects the risk would be `r mean(final_ifr_30)` (`r lci(final_ifr_30)` to `r uci(final_ifr_30)`).
 
 ```{r output-csv}
-csv_df <- data.frame(replications, #replications for mean IFR in 20-30 (takes into account heterogeneity) 
-                     inv_logit(hypermean),   #posterior mean for IFR in 20-30 (mean over included studies)
-                     theta_min,    #lowest estimated posterior IFR in 20-30 (in this case in Belgium)
-                     rr_healthy,   #ratio of mortality in healthy to general population
-                     final_ifr)    #theta_min/rr_healthy
-
-write.csv(csv_df, file = "output/bayesian-posteriors-shiny.csv")
+write.csv(output_df, file = "output/bayesian-posteriors-shiny.csv")
 ```
 
 \pagebreak
