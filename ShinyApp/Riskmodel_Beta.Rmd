@@ -1,5 +1,5 @@
 ---
-title: "Preliminary Model for HCT Dashboard Beta v0.5"
+title: "Preliminary Model for HCT Dashboard Beta v0.9"
 author: "David Manheim"
 output:
   flexdashboard::flex_dashboard:

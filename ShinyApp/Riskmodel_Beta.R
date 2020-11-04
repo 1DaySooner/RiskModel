@@ -1,4 +1,3 @@
-
 #
 # This file will preprocess the IFR / Hopitalized fits from other papers, then simulate.
 
@@ -7,54 +6,9 @@ Age_Range = '20 to 29'
 Pctile = '95%'
 Participants = 35
 
+all_probs = read.csv(file = "app_dataset.csv")
 
-# Note: Both provide a fit for each of IFR and Hospitalization by age for all infections (including asymptomatics.) 
-
-
-
-# This will be the code to preprocess inputs.
-
-# Ideally, structure the data into a single dataframe to pull numbers from.
-# The final version will need to create a combined posterior estimate over multiple studies.
-
-# We will also need to correct for lack of cormorbidities based on studies with that information.
-
-
-# For now, use the France study as our basis for estimates.
-# Load data from files.
-
-Male_probDeath <- cbind(gend = "m", outc="death", read.csv("France_Male_p_death_by_age_range.csv", row.names=1, check.names=FALSE))
-Male_probDeath$ages <- rownames(Male_probDeath)
-Female_probDeath <- cbind(gend = "f", outc="death", read.csv("France_Female_p_death_by_age_range.csv", row.names=1, check.names=FALSE))
-Female_probDeath$ages <- rownames(Female_probDeath)
-Male_probHosp <- cbind(gend = "m", outc="hosp", read.csv("France_Male_p_hospitalization_by_age_range.csv", row.names=1, check.names=FALSE))
-Male_probHosp$ages <- rownames(Male_probHosp)
-Female_probHosp <- cbind(gend = "f", outc="hosp", read.csv("France_Female_p_hospitalization_by_age_range.csv", row.names=1, check.names=FALSE))
-Female_probHosp$ages <- rownames(Female_probHosp)
-Male_probICU <- cbind(gend = "m", outc="ICU", read.csv("France_Male_p_death_by_age_range.csv", row.names=1, check.names=FALSE))
-Male_probICU$ages <- rownames(Male_probICU)
-Female_probICU <- cbind(gend = "f", outc="ICU", read.csv("France_Female_p_death_by_age_range.csv", row.names=1, check.names=FALSE))
-Female_probICU$ages <- rownames(Female_probICU)
-
-participants <- 10:100
-
-problist = paste0(formatC(c(0:100)),"%")
-agelist = c("0 to 19", "20 to 29", "30 to 39", "40 to 49", "50 to 59", "60 to 69", "70 to 79", "80 to 100")
-
-all_probs <- 
-  rbind(
-    reshape(Male_probDeath, direction='long', v.name="value", varying=problist, times=problist, idvar="ages"),
-    reshape(Female_probDeath, direction='long', v.name="value", varying=problist, times=problist, idvar="ages"),
-    reshape(Male_probHosp, direction='long', v.name="value", varying=problist, times=problist, idvar="ages"),
-    reshape(Female_probHosp, direction='long', v.name="value", varying=problist, times=problist, idvar="ages"),
-    reshape(Male_probICU, direction='long', v.name="value", varying=problist, times=problist, idvar="ages"),
-    reshape(Female_probICU, direction='long', v.name="value", varying=problist, times=problist, idvar="ages")
-  )
-
-names(all_probs)[4] <- "probability"
-row.names(all_probs) <- NULL
-
-all_probs = as.data.frame(all_probs)
+all_probs[,'probability'] = paste0(all_probs[,'probability']*100,"%")
 
 # Data is together. Now pulling is easy!
 require(dplyr)
@@ -64,7 +18,7 @@ IndivRisk = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome='de
   if (gender == 'b'){gender = c('m','f')}
   if(Age_Range == '20 to 39'){Age_Range = c('20 to 29','30 to 39')}
   relevant_probs <- all_probs %>%
-  filter(ages %in% Age_Range, probability  %in%  Pctile, gend  %in% gender, outc  %in% outcome) %>%
+  filter(ages %in% Age_Range, probability  %in%  Pctile, gend %in% gender, outc %in% outcome) %>%
   mutate(therapy=Therapy, value=value*(1-Therapy))
   return(relevant_probs)
 }
@@ -73,7 +27,7 @@ IndivRiskPull = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome
   return(mean(unlist(IndivRisk(Age_Range, Pctile, gender, outcome, Therapy)['value'])))
 }
 
-# To be done.
+# To be created based on study information.
 DoseResponse = function(Dose, Risk){ #Returns a value in (0,1) for the new risk. This can be customized.
   # Doses are likely concentrations of 10^4, 10^5, 10^6, and/or 10^7.
   # The Risk is the population level risk of a given impact. 
