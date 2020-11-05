@@ -14,17 +14,17 @@ all_probs[,'probability'] = paste0(all_probs[,'probability']*100,"%")
 require(dplyr)
 
 
-IndivRisk = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', Therapy=0){
+IndivRisk = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', sta="all", population="best", Therapy=0){
   if (gender == 'b'){gender = c('m','f')}
   if(Age_Range == '20 to 39'){Age_Range = c('20 to 29','30 to 39')}
   relevant_probs <- all_probs %>%
-  filter(ages %in% Age_Range, probability  %in%  Pctile, gend %in% gender, outc %in% outcome) %>%
+  filter(ages %in% Age_Range, probability  %in%  Pctile, gend %in% gender, outc %in% outcome, status %in% sta, case %in% population) %>%
   mutate(therapy=Therapy, value=value*(1-Therapy))
   return(relevant_probs)
 }
 
-IndivRiskPull = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', Therapy=0){
-  return(mean(unlist(IndivRisk(Age_Range, Pctile, gender, outcome, Therapy)['value'])))
+IndivRiskPull = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', sta="all", population="best", Therapy=0){
+  return(mean(unlist(IndivRisk(Age_Range, Pctile, gender, outcome, sta, population, Therapy)['value'])))
 }
 
 # To be created based on study information.
@@ -46,8 +46,8 @@ Study_Definition_Example = list(Groups=list(list(Risk=0.001, Count=5,Dose=10), l
 
 # Given a list of things about a study, we want to create that study definition.
 
-Make_Study <- function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', Therapy=0, dose=0, simulate=FALSE){
-  Indiv_Risk = IndivRisk(Age_Range, Pctile, gender, outcome, Therapy)
+Make_Study <- function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', sta="all", population="best", Therapy=0, dose=0, simulate=FALSE){
+  Indiv_Risk = IndivRisk(Age_Range, Pctile, gender, outcome, sta, population, Therapy)
   groups = dim(Indiv_Risk)[1]
   if (simulate == TRUE){
     warning("Simulation is not yet fully implemented for Make_Study.")
@@ -74,11 +74,11 @@ Make_Study <- function(Participants=1, Age_Range='20 to 29', Pctile='95%', gende
     }
   }
 
-StudyRisk <- function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', Therapy=0, average=TRUE){
+StudyRisk <- function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', sta="all", population="best", Therapy=0, average=TRUE){
   if (length(outcome)>1){
     warning("Too many outcomes here.")
   }
-  Study_Characteristics = Make_Study(Participants, Age_Range, Pctile, gender, outcome, Therapy)
+  Study_Characteristics = Make_Study(Participants, Age_Range, Pctile, gender, outcome, sta, population, Therapy)
   
   prob_none = 1
   for(i in 1:length(Study_Characteristics$Groups)){
@@ -90,14 +90,14 @@ StudyRisk <- function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender
 
 #Assumes that per-gender and per-age percentiles are perfectly correlated, i.e. we pick a single random number for the full study for each simulation across all ages and genders. We then pick the 95th percentile of these.
 
-Simulate_StudyRisks = function(Simulations = 1000, Participants=1, Age_Range='20 to 29', gender='f',Therapy = 0, qtile=c(0.95)){
+Simulate_StudyRisks = function(Simulations = 1000, Participants=1, Age_Range='20 to 29', gender='f', sta="all", population="best", Therapy = 0, qtile=c(0.95)){
   P_per_sim = runif(Simulations, min=0, max=100) #Pick percentiles from the overall population risk estimate to simulate
   death_probs=c()
   hosp_probs=c()
   for(i in 1:Simulations){
     P=paste0(as.character(round(P_per_sim[i])),"%")
-    death_probs[i]= StudyRisk(Participants=Participants, Age_Range=Age_Range, gender=gender, outcome='death', Therapy=Therapy, Pctile = P)
-    hosp_probs[i] = StudyRisk(Participants=Participants, Age_Range=Age_Range, gender=gender, outcome='hosp', Therapy=Therapy, Pctile = P)
+    death_probs[i]= StudyRisk(Participants=Participants, Age_Range=Age_Range, gender=gender, outcome='death', Therapy=Therapy, sta=sta, population=population, Pctile = P)
+    hosp_probs[i] = StudyRisk(Participants=Participants, Age_Range=Age_Range, gender=gender, outcome='hosp', Therapy=Therapy, sta=sta, population=population, Pctile = P)
   }
   return(c(Death_qtile=quantile(death_probs, qtile), Hosp_qtile = quantile(hosp_probs, qtile)))
 }
@@ -105,7 +105,7 @@ Simulate_StudyRisks = function(Simulations = 1000, Participants=1, Age_Range='20
 
 
 #SUPER inefficient! (This takes a long time to run. 20 seconds per million is too slow.)
-Simulate_Studies =  function(Simulations = 1000, Participants=15, Age_Range='20 to 29', gender='f', Therapy=0, weights='Even'){
+Simulate_Studies =  function(Simulations = 1000, Participants=15, Age_Range='20 to 29', gender='f', sta="all", population="best", Therapy=0, weights='Even'){
   if(gender=='b'){
     subgroups_g = c('m','f') 
   } else {
@@ -127,8 +127,8 @@ Simulate_Studies =  function(Simulations = 1000, Participants=15, Age_Range='20 
     hospitalizations = 0
     deaths = 0
     for(p in 1:Participants){
-      d=IndivRiskPull(Age_Range=ageranges[p], Pctile=P, gender=genders[p], Therapy=Therapy, outcome='death')
-      h=IndivRiskPull(Age_Range=ageranges[p], Pctile=P, gender=genders[p], Therapy=Therapy, outcome='hosp')
+      d=IndivRiskPull(Age_Range=ageranges[p], Pctile=P, gender=genders[p], Therapy=Therapy, sta=sta, population=population, outcome='death')
+      h=IndivRiskPull(Age_Range=ageranges[p], Pctile=P, gender=genders[p], Therapy=Therapy, sta=sta, population=population, outcome='hosp')
       if(outcome_probs[p]<d){deaths = deaths+1} else if(outcome_probs[p]<h){hospitalizations = hospitalizations+1}
     }
   outcomes[i,]=c(hospitalizations, deaths)
