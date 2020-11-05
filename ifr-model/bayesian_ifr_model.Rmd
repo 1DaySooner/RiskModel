@@ -255,7 +255,6 @@ The smallest posterior mean for 20-29 year olds is `r inv_logit(min(theta_mean))
 
 
 
-
 ### Predictive checks for the model
 
 ```{r}
@@ -352,7 +351,7 @@ gridExtra::grid.arrange(grobs = list(gg + ggtitle("A") + theme(legend.position =
 
 ## Sensitivity analyses
 
-__WW: I WILL WORK ON THIS IN NOV-DEC 2020. ALL 4 OF THESE ARE ESSENTIAL__
+__WW: I WILL WORK ON THIS IN NOV-DEC 2020. ALL 4 OF THESE ARE ESSENTIAL FOR PUBLICATION (to make sure our assumptions are not distorting the results in unexpected ways)__
 
 * Exclusion of small studies and test & trace data
 * Median age: exclusion of 80+ population (non-linear behaviour on logit IFR?)
