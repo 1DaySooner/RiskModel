@@ -22,14 +22,14 @@ source("Riskmodel_Beta.R")
 # Function Definitions (from Shiny_Alpha.R)
 mm_tribble <- tribble(
       ~activity, ~micromorts, ~col,
-      "Skydiving Once", 8, "Other",
       "Running a Marathon", 7, "Other",
-      "Motorcycle from NYC to DC", 37.5, "Other",
+      "Skydiving Once", 8, "Other",
+      "Motorcycle trip from NYC to DC", 37.5, "Other",
       #"Motorcycle Trip \n from NYC to LA", 465, "Other",
+      "Giving birth normally", 60, "Other",
       "Living Kidney Donation",300, "Other",
-      "Giving birth", 60, "Other",
       #"Soldier in Afganistan \n in 2009 for 1 week", 336, "Other",
-      "Trucking for 1 year", 280, "Other",
+      #"Trucking for 1 year", 280, "Other",
       #"Logging for 1 year", 737, "Other",
       "Liver Donation \n (left lobe)", 1000, "Other")
 
@@ -91,14 +91,14 @@ selectInput(
 checkboxInput(
 'adjustment_status', 
 'Adjust for no comorbidities', 
-value = TRUE, 
+value = FALSE, 
 width = NULL
 )
 
 checkboxInput(
 'adjustment_population', 
 'Adjust for best-case population', 
-value = TRUE, 
+value = FALSE, 
 width = NULL
 )
 
@@ -245,7 +245,7 @@ renderValueBox({
   if (output > 0.9945) out_mean <- basicFormatter(output, display_digits=4)
   valueBox(
     value = out_mean,
-        caption = paste0("Probability of no deaths during study. \n 95% CI: ", basicFormatter(hosp_high(), display_digits=4), " to ", basicFormatter(hosp_low(), display_digits=4)),
+        caption = paste0("Probability of no cases requiring hospitalization during study. \n 95% CI: ", basicFormatter(hosp_high(), display_digits=4), " to ", basicFormatter(hosp_low(), display_digits=4)),
     # icon = "icon_name"
     color = c("#45497d")
   )
@@ -402,7 +402,7 @@ renderPlot({
   out_95_percent %>% 
     ggplot(aes(status, out_95)) +
     geom_col(fill =c("#1B2B65")) +
-    scale_y_continuous(labels = scales::label_percent(scale = 10), breaks = scales::breaks_pretty(7), limits = c(0, 0.01)) +
+    scale_y_continuous(labels = scales::label_percent(scale = 10), breaks = scales::breaks_pretty(7), limits = c(0, 10^(round(log10(graph_risks()[4]))+0.5))) +
     labs(
       title = "Risk by Outcome",
       subtitle = "95% probability that actual value is in contained within the blue shaded region",
@@ -490,7 +490,7 @@ The interface allows choosing whether to adjust for expected-case mortality, bas
 Note that this model is appropriate for considering a dosage trial, and while the size of such a trial may vary, one approach would be to expose 5 volunteers each to 3 increasing titers of COVID-19, stopping if the majority or all volunteers for a given exposure level develop clinical disease. Following this, an additional 10-20 volunteers would be given the appropriate titer of COVID-19, to validate the initial result.  The default number of participants is therefor 50.<br />
 
 <h3>Methodology</h3>
-  The methodology for this preliminary, not peer reviewed risk model is detailed in a forthcoming paper. <a href='https://github.com/1DaySooner/RiskModel/blob/master/ifr-model/bayesian_ifr_model.pdf'>The appendix of the working paper detailing the model</a> can be found in <a href="https://github.com/1DaySooner/RiskModel/">our github repository</a>, along with source code and other details. This model estimates IFR, and hospitalization rates are based on relative risk of hospitalization and mortality from <a hre="https:// science.sciencemag.org/cgi/content/full/science.abc3517">Salje et al.</a>
+  The methodology for this preliminary, not peer reviewed risk model is detailed in a forthcoming paper. <a href='https://github.com/1DaySooner/RiskModel/blob/master/ifr-model/bayesian_ifr_model.pdf'>The appendix of the working paper detailing the model</a> can be found in <a href="https://github.com/1DaySooner/RiskModel/">our github repository</a>, along with source code and other details. This model estimates IFR, and hospitalization rates are based on relative risk of hospitalization and mortality from <a href="https:// science.sciencemag.org/cgi/content/full/science.abc3517">Salje et al.</a>
   
 <!-- This doesn't work. "Not Found". Grrr.
 Preprint Paper
