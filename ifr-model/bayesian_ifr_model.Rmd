@@ -594,20 +594,21 @@ output_df <- data.frame(
   mutate(
     rr_healthy_30   = rr_healthy_25/2 + rr_healthy_35/2, #weighted mean of 2 age groups
     # For each quantity we derive first using median of 25 years, then of 30 years
-    hyperifr_25     = inv_logit(hypermean),
-    hyperifr_30     = inv_logit(hypermean + .5*beta),
-    hyperifr_35     = inv_logit(hypermean + beta),
+    metaanalysis_ifr_25     = inv_logit(hypermean),
+    # metaanalysis_ifr_30     = inv_logit(hypermean + .5*beta),
+    metaanalysis_ifr_35     = inv_logit(hypermean + beta),
     replications_25 = inv_logit(rnorm(nsamples, hypermean, hypersd)),
-    replications_30 = inv_logit(rnorm(nsamples, hypermean + .5*beta, hypersd)),
+    # replications_30 = inv_logit(rnorm(nsamples, hypermean + .5*beta, hypersd)),
     replications_35 = inv_logit(rnorm(nsamples, hypermean + beta, hypersd)),
     ifr_min_25      = inv_logit(theta_min),
-    ifr_min_30      = inv_logit(theta_min + .5*beta),
+    # ifr_min_30      = inv_logit(theta_min + .5*beta),
     ifr_min_35      = inv_logit(theta_min + beta)
   ) %>%
   mutate(
-    final_ifr_25 = ifr_min_25/rr_healthy_25,
-    final_ifr_30 = ifr_min_30/rr_healthy_30,
-    final_ifr_35 = ifr_min_35/rr_healthy_35
+    min_healthy_ifr_25 = ifr_min_25/rr_healthy_25,
+    min_healthy_ifr_35 = ifr_min_35/rr_healthy_35,
+    metaanalysis_healthy_ifr_25 = metaanalysis_ifr_25/rr_healthy_25,
+    metaanalysis_healthy_ifr_35 = metaanalysis_ifr_35/rr_healthy_35,
   )
 
 attach(output_df, warn.conflicts = FALSE)
