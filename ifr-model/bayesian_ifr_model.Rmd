@@ -167,7 +167,7 @@ We used estimates originally collected by @levin_assessing_2020 to construct the
 data_ns <- df %>% group_by(Study) %>% tally() %>% pull(n)
 ```
 
-All of input data are given in Table \@ref(tab:input-data-tab). The analysis dataset contains `r nrow(df)` data points from `r length(data_ns)` studies, each containing between `r min(data_ns)` and `r max(data_ns)` different age groups. We made only minimal modifications to source data, by 1) imputing the values in Italian study (__David to describe__?), 2) imputing population size in Maranhao (as ratio of the reported number of infections and the mean infection rate) which were not reported and 3) assuming that uncertainty in prevalence 0-29 age group in Iceland is same as in the 30-39 age group since data were missing.
+All of input data are given in Table \@ref(tab:input-data-big). The analysis dataset contains `r nrow(df)` data points from `r length(data_ns)` studies, each containing between `r min(data_ns)` and `r max(data_ns)` different age groups. We made only minimal modifications to source data, by 1) imputing the values in Italian study (__David to describe__?), 2) imputing population size in Maranhao (as ratio of the reported number of infections and the mean infection rate) which were not reported and 3) assuming that uncertainty in prevalence 0-29 age group in Iceland is same as in the 30-39 age group since data were missing.
 
 As mentioned, our model treats number of Covid-attributable deaths as measured without error (due to lack of data) but accounts for uncertainty in infection rates, which are always model-based estimates extracted from various available data sources. In preparing data, we assumed that logits of prevalence estimates from available studies are normally distributed, which seems to reproduce majority of data very well, see Figure \@ref(fig:prevalence-data) in the Supplement. There are some discrepancies with studies that allowed for prevalence estimates to be 0, something that our logit model does not allow.
 
@@ -235,7 +235,7 @@ Since we centered our `MedianAge` at 25 years in constructing our matrix $X$, we
 
 However, there is a considerable variability in IFRs across different locations/dataset that we should consider. To take into account parameter $\sigma$, we can generate draws from the $\mathcal{N}(\tau, \sigma^2)$ distribution, corresponding to a hypothetical IFR in a new source of data. 95% interval for such model runs from `r quantile(replications, .025)` to `r quantile(replications, .975)`. Since the model works a logistic scale, another way of interpreting the across-dataset variability is reporting the fold-impact of $\sigma$ on the mean IFR; here, we obtain on average a `r mean(exp(2*hypersd))`-fold increase (decrease) in IFR per $2\sigma$ increase (decrease).
 
-The lower end of the 95% interval, `r quantile(replications, .025)`, is not extreme given input data, where the "crude" mean IFR (based on mean prevalence only) is below 7 per 10,000 for all data except for South Florida, and as low as 0 for some countries that did not record deaths (Belgium, New Zealand, Korea, Iceland) in various age groups including 20-29 year olds or 1.4 per 10,000 in Utah, in the population aged 19-44. (Please refer to Table \@ref(tab:input-data-tab) for complete list of inputs.)
+The lower end of the 95% interval, `r quantile(replications, .025)`, is not extreme given input data, where the "crude" mean IFR (based on mean prevalence only) is below 7 per 10,000 for all data except for South Florida, and as low as 0 for some countries that did not record deaths (Belgium, New Zealand, Korea, Iceland) in various age groups including 20-29 year olds or 1.4 per 10,000 in Utah, in the population aged 19-44. (Please refer to Table \@ref(tab:input-data-big) for complete list of inputs.)
 
 ```{r, eval = FALSE}
 df %>% filter(Median_Age > 10, Median_Age < 35) %>% 
@@ -349,7 +349,7 @@ gridExtra::grid.arrange(grobs = list(gg + ggtitle("A") + theme(legend.position =
 
 ```
 
-## Sensitivity analyses
+## Sensitivity analyses (WORK IN PROGRESS)
 
 __WW: I WILL WORK ON THIS IN NOV-DEC 2020. ALL 4 OF THESE ARE ESSENTIAL FOR PUBLICATION (to make sure our assumptions are not distorting the results in unexpected ways)__
 
@@ -414,7 +414,8 @@ se <- sqrt((n1-f1)/(n1*f1) + (n2-f2)/(n2*f2))
 rr_ci <- c(exp(rr - 2*se), exp(rr + 2*se))
 ```
 
-Data for this section has been provided by OpenSAFELY (<https://opensafely.org/>) and was used by @williamson_factors_2020 to characterise Covid-19 mortality risk factors for 10,926 Covid-19 deaths in England. We group the total of 21,444,863 individuals into high and low risk groups as follows: __Definition of co-morbiditiy goes here (David/team).__ For brevity we define population without one of the pre-defined comorbidities as "healthy". In contrast to the cited publication, we include records of individuals under 18 in our assessment. Counts grouped by age are presented in Table \@ref(tab:open-safely-tab). Complete data (broken down by gender) are in Table \@ref(tab:open-safely-all) at the end of the document.
+Data for this section has been provided by OpenSAFELY (<https://opensafely.org/>) and was used by @williamson_factors_2020 to characterise Covid-19 mortality risk factors for 10,926 Covid-19 deaths in England. We group the total of 21,444,863 individuals into a total population and a lower-risk sub-population, defined as non-smoker, non-obese and without the comoribidities reported in the OpenSAFELY study\footnote{"asthma, other chronic respiratory disease, chronic heart disease, diabetes mellitus, chronic liver disease, chronic neurological diseases, common autoimmune diseases (Rheumatoid Arthritis (RA), Systemic Lupus Erythematosus (SLE) or psoriasis), solid organ transplant, asplenia, other immunosuppressive conditions, cancer, evidence of reduced kidney function, and raised blood pressure or a diagnosis of hypertension"}, most notably respiratory and cardiovascular diseases and type I diabetes.
+For brevity we refer to the population without one of the pre-defined comorbidities as "healthy". In contrast to the cited publication, we include records of individuals under 18 in our assessment. Counts grouped by age are presented in Table \@ref(tab:open-safely-tab). Complete data (broken down by gender) are in Table \@ref(tab:open-safely-all) at the end of the document.
 
 ```{r}
 como_df <- stan_df %>%
@@ -595,17 +596,18 @@ output_df <- data.frame(
     rr_healthy_30   = rr_healthy_25/2 + rr_healthy_35/2, #weighted mean of 2 age groups
     # For each quantity we derive first using median of 25 years, then of 30 years
     metaanalysis_ifr_25     = inv_logit(hypermean),
-    # metaanalysis_ifr_30     = inv_logit(hypermean + .5*beta),
+    metaanalysis_ifr_30     = inv_logit(hypermean + .5*beta),
     metaanalysis_ifr_35     = inv_logit(hypermean + beta),
     replications_25 = inv_logit(rnorm(nsamples, hypermean, hypersd)),
     # replications_30 = inv_logit(rnorm(nsamples, hypermean + .5*beta, hypersd)),
     replications_35 = inv_logit(rnorm(nsamples, hypermean + beta, hypersd)),
     ifr_min_25      = inv_logit(theta_min),
-    # ifr_min_30      = inv_logit(theta_min + .5*beta),
+    ifr_min_30      = inv_logit(theta_min + .5*beta),
     ifr_min_35      = inv_logit(theta_min + beta)
   ) %>%
   mutate(
     min_healthy_ifr_25 = ifr_min_25/rr_healthy_25,
+    min_healthy_ifr_30 = ifr_min_30/rr_healthy_30,
     min_healthy_ifr_35 = ifr_min_35/rr_healthy_35,
     metaanalysis_healthy_ifr_25 = metaanalysis_ifr_25/rr_healthy_25,
     metaanalysis_healthy_ifr_35 = metaanalysis_ifr_35/rr_healthy_35,
@@ -616,17 +618,17 @@ attach(output_df, warn.conflicts = FALSE)
 
 ```
 
-In conclusion, the implications of the model for risk in healthy young subjects are as follows:
+In conclusion, the implications of the model for the risk in healthy young subjects are as follows:
 
-* We find that average IFR in 20-29 age group for the studies included in this analysis is `r mean(hyperifr_25)` with 95% interval from `r lci(hyperifr_25)` to `r uci(hyperifr_25)`.
+* We find that average IFR in 20-29 age group for the studies included in this analysis is `r mean(metaanalysis_ifr_25)` with 95% interval from `r lci(metaanalysis_ifr_25)` to `r uci(metaanalysis_ifr_25)`.
     + It is feasible that the mean IFR can be decreased as much as `r mean(exp(2*hypersd))`-fold ($2\sigma$ impact on the IFR according to hyper-SD parameter in the meta-analysis model). 
     + It is easy to argue that a HCT designer would be able to achieve IFR at least as low as within any of the large-scale studies included in our sample of populations. The smallest posterior mean for 20-29 year olds is `r inv_logit(min(theta_mean))`, fitted to data from `r names(theta_mean)[which.min(theta_mean)]`.
-    + Extending the HCT population to also include 30-39 year olds would lead to mean IFR of `r mean(hyperifr_30)` with 95% interval from `r lci(hyperifr_30)` to `r uci(hyperifr_30)`. Lowest mean IFR would then be `r mean(ifr_min_30)` (also in `r names(theta_mean)[which.min(theta_mean)]`).
+    + Extending the HCT population to also include 30-39 year olds would lead to mean IFR of `r mean(metaanalysis_ifr_30)` with 95% interval from `r lci(metaanalysis_ifr_30)` to `r uci(metaanalysis_ifr_30)`. Lowest mean IFR would then be `r mean(ifr_min_30)` (also in `r names(theta_mean)[which.min(theta_mean)]`).
 * In healthy population (defined as lack of co-morbidities listed above), the average mortality risk in 20-29 year olds is `r mean(rr_healthy_25)` times lower than in the general population, with 95% uncertainty interval from `r lci(rr_healthy_25)` to `r uci(rr_healthy_25)`.
     + Our `r mean(rr_healthy_25)` estimate is a bit higher than the mean "crude" risk ratio of 1.53 because we use a Bayesian hierarchical model that synthesises evidence across all age groups. 
     + Expanding to 20-39 year olds, the risk in healthy sub-population would be `r mean(rr_healthy_30)` times lower than in the general population (95% interval from `r lci(rr_healthy_25)` to `r uci(rr_healthy_25)`).
-* Combining the smallest posterior IFR for 20-29 year olds with our estimated fold-reduction due to excluding individuals with co-morbidities from the population would lead to a mean infection fatality risk of  `r mean(final_ifr_25)` with 95% Bayesian interval from `r lci(final_ifr_25)` to `r uci(final_ifr_25)`.
-    + In 20-39 year old subjects the risk would be `r mean(final_ifr_30)` (`r lci(final_ifr_30)` to `r uci(final_ifr_30)`).
+* Combining the smallest posterior IFR for 20-29 year olds with our estimated fold-reduction due to excluding individuals with co-morbidities from the population would lead to a mean infection fatality risk of  `r mean(min_healthy_ifr_25)` with 95% Bayesian interval from `r lci(min_healthy_ifr_25)` to `r uci(min_healthy_ifr_25)`.
+    + In 20-39 year old subjects the risk would be `r mean(min_healthy_ifr_30)` (`r lci(min_healthy_ifr_30)` to `r uci(min_healthy_ifr_30)`).
 
 ```{r output-csv}
 write.csv(output_df, file = "output/bayesian-posteriors-shiny.csv")
@@ -653,7 +655,7 @@ df %>%
 
 \pagebreak
 
-```{r input-data-tab}
+```{r input-data-big}
 df_tab <- all_data_xls %>% 
   arrange(Median_Age, Study) %>%
   select(Study, StudyScale, StudyType, EndDate, 
@@ -681,27 +683,5 @@ kbl(df_tab,  longtable = TRUE, booktabs = TRUE,
 ```
 
 \pagebreak
-
-```{r open-safely-all}
-stan_df %>%
-  group_by(Age_min, no_com, Gender) %>%
-  summarise(p=sum(Population), f=sum(f), .groups = "keep") %>%
-  mutate(m = f/p) %>%
-  mutate(m = 1e05*m) %>%
-  mutate(Age_min = paste(Age_min, "to", ifelse(Age_min == 70, "Inf", Age_min+9))) %>%
-  rename(nocom = no_com) %>% 
-  gather(key, value, -Age_min, -nocom, -Gender) %>% 
-  pivot_wider(names_from = c(key, nocom), values_from = value) %>%
-  arrange(Gender) %>%
-  mutate(rr = m_0/m_1) %>%
-  kbl(col.names = c("Age group", "Gender", "All", "Healthy", "All", "Healthy", "All", "Healthy", "RR"),
-      caption = "Data from the OpenSAFELY database grouped by age and broken down by gender.",
-      booktabs = TRUE, 
-      format.args = list(big.mark = ",")) %>%
-  kable_styling() %>%
-  add_header_above(c(" " = 2, "Population" = 2, "Fatalities" = 2, "FR per 100k" = 2, " " = 1)) %>%
-  group_rows("Female", 1, 8) %>%
-  group_rows("Male", 9, 16)
-```
 
 # References
