@@ -23,21 +23,24 @@ source("Riskmodel_Beta.R")
 mm_tribble <- tribble(
       ~activity, ~micromorts, ~col,
       "Running a Marathon", 7, "Other",
-      "Skydiving Once", 8, "Other",
-      "Motorcycle trip from NYC to DC", 37.5, "Other",
+      # "Skydiving Once", 8, "Other",
+      # "Motorcycle trip from NYC to DC", 37.5, "Other",
       #"Motorcycle Trip \n from NYC to LA", 465, "Other",
-      "Giving birth normally", 60, "Other",
+      "Giving birth (UK)", 60, "Other",
+      "Liposuction", 200, "Other",
       "Living Kidney Donation",300, "Other",
       #"Soldier in Afganistan \n in 2009 for 1 week", 336, "Other",
       #"Trucking for 1 year", 280, "Other",
       #"Logging for 1 year", 737, "Other",
-      "Liver Donation \n (left lobe)", 1000, "Other")
+      "Liver Donation \n (left lobe)", 1000, "Other"
+      )
 
 micromortify <- function(Micromorts){
   mm_names <- unlist(mm_tribble['activity'])
   mm_values <- unlist(mm_tribble['micromorts'])
-  closest_answer <- (abs(mm_values - Micromorts) == min(abs(mm_values - Micromorts)))
-  output_list <- list(name = mm_names[closest_answer], num = mm_values[closest_answer])
+  next_larger <- which(mm_values - Micromorts > 0)[1]
+  #closest_answer <- (abs(mm_values - Micromorts) == min(abs(mm_values - Micromorts)))
+  output_list <- list(name = mm_names[next_larger], num = mm_values[next_larger], rr = Micromorts / mm_values[next_larger])
 }
 
 basicFormatter <- function(Number, Mode='Pct', display_digits=3) {
@@ -47,7 +50,16 @@ basicFormatter <- function(Number, Mode='Pct', display_digits=3) {
         prettyNum(Number * 100, digits = display_digits, format = "g", drop0trailing = TRUE), "%")
     )
   }
+  if (Mode == 'Odds') {
+    in_X = round(-log10(Number)+1)
+    Y_in = round(Number*(10^in_X),1)
+    return(
+      paste0(Y_in, " in ", format(10^in_X, big.mark=",", scientific=FALSE))
+    )
+  }
 }
+
+
 ```
 
 Inputs {.sidebar}
@@ -123,7 +135,7 @@ mm_ify = reactive(micromortify(micromorts()))
 renderValueBox({
   mm_name <- mm_ify()$name
   valueBox(
-    value = paste0("Risk similar to: ", mm_name),
+    value = paste0("Participations is ", basicFormatter(mm_ify()$rr,"Pct",1), " as risky as ", mm_ify()$name),
     color = c("#8e8db0")
   )
 })
@@ -282,9 +294,56 @@ hosp_95 <- #Needed later.
 
 ```
 
-### Micromorts {.value-box}
+### Probability of Individual Death {.value-box}
 
 ```{r}
+Odds <-
+  reactive(
+    basicFormatter(
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = input$gender,
+        outcome = 'death',
+        Therapy = input$p_treatment, 
+        sta = (if (input$adjustment_status) "healthy" else "all"),
+        population = (if (input$adjustment_population) "best" else "meta"),
+        Pctile = "50%"
+      ), "Odds"
+    )
+  )
+
+Odds_low <-
+  reactive(
+    basicFormatter(
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = input$gender,
+        outcome = 'death',
+        Therapy = input$p_treatment, 
+        sta = (if (input$adjustment_status) "healthy" else "all"),
+        population = (if (input$adjustment_population) "best" else "meta"),
+        Pctile = "2.5%"
+      ), "Odds"
+    )
+  )
+
+
+Odds_high <-
+  reactive(
+    basicFormatter(
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = input$gender,
+        outcome = 'death',
+        Therapy = input$p_treatment, 
+        sta = (if (input$adjustment_status) "healthy" else "all"),
+        population = (if (input$adjustment_population) "best" else "meta"),
+        Pctile = "97.5%"
+      ), "Odds"
+    )
+  )
+
+
 micromorts <-
   reactive(
     round(
@@ -296,9 +355,10 @@ micromorts <-
         sta = (if (input$adjustment_status) "healthy" else "all"),
         population = (if (input$adjustment_population) "best" else "meta"),
         Pctile = "50%"
-      ) * 1000000
+      ) * 1000000,1
     )
   )
+
 
 micromorts_low <-
   reactive(
@@ -334,8 +394,8 @@ micromorts_high <-
 renderValueBox({
   mm <- micromorts()
   valueBox(
-    value = mm,
-    caption = paste0("Micromorts (unit of risk, one-in-a-million chance of death) per individual. \n 95% CI: ", micromorts_low(), " to ", micromorts_high()),
+    value = Odds(),
+    caption = paste0("95% CI: ", Odds_low(), " to ", Odds_high()),
     color = c("#45497d")
   )
 })
@@ -462,20 +522,28 @@ b_micromorts <-
     )
   )
 
+
+max_y <- 500
+
 renderPlot({
   mm_tribble %>% 
-    add_row(activity="HCT Volunteer (Male)", micromorts=m_micromorts(), col="Participate") %>%
-    add_row(activity="HCT Volunteer (Female)", micromorts=f_micromorts(), col="Participate") %>%
-    ggplot(aes(fct_reorder(activity, micromorts, .desc = FALSE), micromorts, fill=col)) +
-    geom_col() +
-    labs(
-      title = "Micromorts by Gender",
-      x = NULL,
-      y = "Micromorts"
-    ) +
-    theme_minimal() +
-    scale_fill_manual(values=c("#1B2B65", "#FFD600")) +
-    theme(legend.position = "none")
+      add_row(activity="HCT Volunteer (Male)", 
+          micromorts=50, col="Participate") %>% 
+  add_row(activity="HCT Volunteer (Female)", 
+          micromorts=60, col="Participate") %>% 
+  mutate(label_y = ifelse(micromorts > max_y, max_y, micromorts + 25)) %>%
+  ggplot(aes(fct_reorder(activity, micromorts, .desc = FALSE), micromorts, fill=col)) +
+  geom_col() +
+  labs(
+    title = "Micromorts by Gender",
+    x = NULL,
+    y = "Micromorts"
+  ) +
+  theme_minimal() +
+  scale_fill_manual(values=c("#1B2B65", "#FFD600")) +
+  coord_cartesian(ylim = c(0,max_y)) + 
+  geom_label(aes(label = micromorts, y = label_y), col = "white") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
 })
 ```
 
@@ -492,6 +560,14 @@ Note that this model is appropriate for considering a dosage trial, and while th
 <h3>Methodology</h3>
   The methodology for this preliminary, not peer reviewed risk model is detailed in a forthcoming paper. <a href='https://github.com/1DaySooner/RiskModel/blob/master/ifr-model/bayesian_ifr_model.pdf'>The appendix of the working paper detailing the model</a> can be found in <a href="https://github.com/1DaySooner/RiskModel/">our github repository</a>, along with source code and other details. This model estimates IFR, and hospitalization rates are based on relative risk of hospitalization and mortality from <a href="https:// science.sciencemag.org/cgi/content/full/science.abc3517">Salje et al.</a>
   
+
+Long Term Risks
+=======================================================================
+<div class="LTR" width='100%' height='600px'>
+<iframe src='https://1daysooner.org/long-term-risks-faq#page' width='100%' height='600px'></iframe>
+</div>
+
+
 <!-- This doesn't work. "Not Found". Grrr.
 Preprint Paper
 =======================================================================
