@@ -1,12 +1,17 @@
 #
 # This file will preprocess the IFR / Hopitalized fits from other papers, then simulate.
 
-# Study / Analysis Characteristics: (Set in function)
-Age_Range = '20 to 29'
-Pctile = '95%'
-Participants = 35
-
 all_probs = read.csv(file = "app_dataset.csv")
+
+relative_risk = 0
+ifr_model_out = 0
+
+runSim = function(simulate=False){
+if (simulate){ #Don't load this data unless needed.
+  relative_risk <<- read.csv(file = "relative_risks.csv") #Double arrow makes it a global variable.
+  ifr_model_out <<- read.csv("../ifr-model/output/bayesian-posteriors-shiny.csv", row.names=1, check.names=FALSE)
+}
+}
 
 all_probs[,'probability'] = paste0(all_probs[,'probability']*100,"%")
 
@@ -23,8 +28,17 @@ IndivRisk = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome='de
   return(relevant_probs)
 }
 
-IndivRiskPull = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', sta="all", population="best", Therapy=0){
+IndivRiskPull = function(Age_Range='20 to 29', Pctile='95%', gender='f', outcome='death', sta="all", population="best", Therapy=0, simulate=FALSE){
+  if (simulate){ #Get individual risk directly from bayesian simulation. (Not yet implemented.)
+    warning("Simulation is not yet implemented.") #TODO: This does not include population, status, or Therapy!
+    sample_ifr = sample(ifr_model_out$metaanalysis_ifr_25,simulate) #simulate can be number of simulations
+    relevant_rr <- relative_risk %>%
+      filter(ages %in% Age_Range, gend == gender, outc %in% outcome)
+    return(ifr=sample_ifr*rep(unlist(relevant_rr['rr']),simulate))
+  }
+  else{
   return(mean(unlist(IndivRisk(Age_Range, Pctile, gender, outcome, sta, population, Therapy)['value'])))
+  }
 }
 
 # To be created based on study information.
@@ -51,7 +65,7 @@ Make_Study <- function(Participants=1, Age_Range='20 to 29', Pctile='95%', gende
   groups = dim(Indiv_Risk)[1]
   if (simulate == TRUE){
     warning("Simulation is not yet fully implemented for Make_Study.")
-    simplex = runif(groups,0,Participants) #But this doesn't sum correctly
+    simplex = runif(groups,0,Participants) #But this doesn't sum correctly. So we fix it below.
     group_sizes = round(simplex*Participants/sum(simplex),0)
     while (sum(group_sizes) < Participants){
       add_to = sample(1:groups)[1]
@@ -92,6 +106,7 @@ StudyRisk <- function(Participants=1, Age_Range='20 to 29', Pctile='95%', gender
 
 Simulate_StudyRisks = function(Simulations = 1000, Participants=1, Age_Range='20 to 29', gender='f', sta="all", population="best", Therapy = 0, qtile=c(0.95)){
   P_per_sim = runif(Simulations, min=0, max=100) #Pick percentiles from the overall population risk estimate to simulate
+  
   death_probs=c()
   hosp_probs=c()
   for(i in 1:Simulations){

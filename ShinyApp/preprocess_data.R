@@ -41,7 +41,7 @@ Female_probHosp_France <- cbind(gend = "f", outc="hosp", read.csv("France_Female
 #Female_probICU_France <- cbind(gend = "f", outc="ICU", read.csv("France_Female_p_death_by_age_range.csv", row.names=1, check.names=FALSE))
 #Female_probICU_France$ages <- rownames(Female_probICU)
 
-participants <- 10:100
+# participants <- 10:100
 
 problist = paste0(formatC(c(0:100)),"%")
 agelist = c("0 to 19", "20 to 29", "30 to 39", "40 to 49", "50 to 59", "60 to 69", "70 to 79", "80 to 100")
@@ -80,6 +80,33 @@ rr_death_hosp[which(rr_death_hosp['Gender']=='F'),'rr_gend'] <- rr_death_hosp[wh
 rr_death_hosp[which(rr_death_hosp['Gender']=='B'),'rr_gend'] <- 1
 
 rr_death_hosp['rr_hosp'] <- rr_death_hosp['value.hosp']/rr_death_hosp['value.death']
+
+# Add case, status, gender, ages.
+covariates = full_join(data.frame(Gender=c('M','F','B')), data.frame(outc=c('death','hosp')), by=character())
+#covariates = full_join(covariates,data.frame(status=c('healthy','all')), by=character())
+#covariates = full_join(covariates,, by=character())
+# covariates = full_join(covariates,data.frame(ages=agelist), by=character()) <- This doesn't do ages!
+
+
+rr_death_hosp_age = cbind(rr_death_hosp,rr_age=1)
+rr_death_hosp_age[which(rr_death_hosp_age['ages']=='0 to 19'),'rr_age']  <- rr_death_hosp_age[which(rr_death_hosp_age['ages']=='0 to 19'),'value.death']/rr_death_hosp_age[which(rr_death_hosp_age['ages']=='20 to 29'),'value.death']
+rr_death_hosp_age[which(rr_death_hosp_age['ages']=='30 to 39'),'rr_age']  <- rr_death_hosp_age[which(rr_death_hosp_age['ages']=='30 to 39'),'value.death']/rr_death_hosp_age[which(rr_death_hosp_age['ages']=='20 to 29'),'value.death']
+rr_death_hosp_age[which(rr_death_hosp_age['ages']=='40 to 49'),'rr_age']  <- rr_death_hosp_age[which(rr_death_hosp_age['ages']=='40 to 49'),'value.death']/rr_death_hosp_age[which(rr_death_hosp_age['ages']=='20 to 29'),'value.death']
+rr_death_hosp_age[which(rr_death_hosp_age['ages']=='50 to 59'),'rr_age']  <- rr_death_hosp_age[which(rr_death_hosp_age['ages']=='50 to 59'),'value.death']/rr_death_hosp_age[which(rr_death_hosp_age['ages']=='20 to 29'),'value.death']
+rr_death_hosp_age[which(rr_death_hosp_age['ages']=='60 to 69'),'rr_age']  <- rr_death_hosp_age[which(rr_death_hosp_age['ages']=='60 to 69'),'value.death']/rr_death_hosp_age[which(rr_death_hosp_age['ages']=='20 to 29'),'value.death']
+rr_death_hosp_age[which(rr_death_hosp_age['ages']=='70 to 79'),'rr_age']  <- rr_death_hosp_age[which(rr_death_hosp_age['ages']=='70 to 79'),'value.death']/rr_death_hosp_age[which(rr_death_hosp_age['ages']=='20 to 29'),'value.death']
+rr_death_hosp_age[which(rr_death_hosp_age['ages']=='80 to 100'),'rr_age']  <- rr_death_hosp_age[which(rr_death_hosp_age['ages']=='80 to 100'),'value.death']/rr_death_hosp_age[which(rr_death_hosp_age['ages']=='20 to 29'),'value.death']
+
+
+
+relative_risk_for_simulation = cbind(full_join(covariates, rr_death_hosp_age, by=c('Gender')), rr=0)
+relative_risk_for_simulation['rr'] = relative_risk_for_simulation['rr_gend'] * relative_risk_for_simulation['rr_age']
+relative_risk_for_simulation[which(relative_risk_for_simulation['outc']=='hosp'),'rr']= relative_risk_for_simulation[which(relative_risk_for_simulation['outc']=='hosp'),'rr'] * relative_risk_for_simulation[which(relative_risk_for_simulation['outc']=='hosp'),'rr_hosp']
+
+relative_risk_for_simulation[c('value.death','value.hosp','rr_hosp','rr_gend','rr_age')] = NULL
+
+write.csv(relative_risk_for_simulation, file = "relative_risks.csv")
+
 
 
 # Extract the quantiles from the ifr analysis
