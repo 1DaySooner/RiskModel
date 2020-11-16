@@ -19,6 +19,8 @@ library(flexdashboard)
 source("Riskmodel_Beta.R")
 
 
+
+
 # Function Definitions (from Shiny_Alpha.R)
 mm_tribble <- tribble(
       ~activity, ~micromorts, ~col,
@@ -126,7 +128,7 @@ Dashboard
 Row
 -----------------------------------------------------------------------
 
-### Activity with Comparable Risk to Individual Participation in Study
+### Comparable Risk to Individual Participation in Study
 
 ```{r}
 
@@ -135,16 +137,25 @@ mm_ify = reactive(micromortify(micromorts()))
 renderValueBox({
   mm_name <- mm_ify()$name
   valueBox(
-    value = paste0("Participations is ", basicFormatter(mm_ify()$rr,"Pct",1), " as risky as ", mm_ify()$name),
+    value = paste0("Participation is ", basicFormatter(mm_ify()$rr,"Pct",1), " as risky as ", mm_ify()$name),
     color = c("#8e8db0")
-  )
+    )
 })
 ```
+<!--- Doesn't work - displays NAN.
+### Risk Gauge
+
+```{r}
+renderGauge({
+  gauge(value=(mm_ify()$rr), min = 0, max = 1, symbol = '%')
+})
+```
+--->
 
 Row
 -----------------------------------------------------------------------
 
-### Probability of no deaths during study {.value-box}
+### Average probability of no deaths during study {.value-box}
 
 ```{r}
 
@@ -241,14 +252,14 @@ renderValueBox({
   if (output > 0.99945) out_mean <- basicFormatter(output, display_digits=5) else if (output > 0.9945) out_mean <- basicFormatter(output, display_digits=4)
   valueBox(
     value = out_mean,
-    caption = paste0("Probability of no deaths during study. \n 95% CI: ", basicFormatter(deaths_high(), display_digits=5), " to ", basicFormatter(deaths_low(), display_digits=5)),
+    caption = paste0("Average probability of no deaths during study. \n 95% CI: ", basicFormatter(deaths_high(), display_digits=5), " to ", basicFormatter(deaths_low(), display_digits=5)),
     # icon = "icon_name"
     color = c("#45497d")
   )
 })
 ```
 
-### Probability of no hospitalizations during study {.value-box}
+### Average probability of no hospitalizations during study {.value-box}
 ```{r}
 
 renderValueBox({
@@ -257,7 +268,7 @@ renderValueBox({
   if (output > 0.9945) out_mean <- basicFormatter(output, display_digits=4)
   valueBox(
     value = out_mean,
-        caption = paste0("Probability of no cases requiring hospitalization during study. \n 95% CI: ", basicFormatter(hosp_high(), display_digits=4), " to ", basicFormatter(hosp_low(), display_digits=4)),
+        caption = paste0("Average probability of no cases requiring hospitalization during study. \n 95% CI: ", basicFormatter(hosp_high(), display_digits=4), " to ", basicFormatter(hosp_low(), display_digits=4)),
     # icon = "icon_name"
     color = c("#45497d")
   )
@@ -294,7 +305,7 @@ hosp_95 <- #Needed later.
 
 ```
 
-### Probability of Individual Death {.value-box}
+### Average probability of Individual Death {.value-box}
 
 ```{r}
 Odds <-
@@ -469,8 +480,7 @@ renderPlot({
       x = NULL,
       y = "% Risk",
       color = "Expected"
-    ) +
-    theme_minimal() 
+    ) + theme_minimal(base_size = 18) + theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank())
 })
 ```
 
@@ -539,7 +549,7 @@ renderPlot({
     x = NULL,
     y = "Micromorts"
   ) +
-  theme_minimal() +
+  theme_minimal(base_size = 18) + theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank()) +
   scale_fill_manual(values=c("#1B2B65", "#FFD600")) +
   coord_cartesian(ylim = c(0,max_y)) + 
   geom_label(aes(label = micromorts, y = label_y), col = "white") +
@@ -551,7 +561,7 @@ About Model
 =======================================================================
 
 <h3>Using the Model</h3>
-This model represents the risk of deaths or hospitalizations during a notional Human Challenge Trial dosing study for COVID-19, of the type <a href="https://edition.cnn.com/2020/10/20/health/uk-coronavirus-challenge-study-intl/index.html">planned in the UK in early 2021</a>. It displays the probability that there will be no deaths and no hospitalizations for all participants in the study, along with the number of "micromorts" which are faced by each partipant in the study. Below this, a roughly comparable risk of a different type is shown.<br />
+This model represents the risk of deaths or hospitalizations during a notional Human Challenge Trial dosing study for COVID-19, of the type <a href="https://edition.cnn.com/2020/10/20/health/uk-coronavirus-challenge-study-intl/index.html">planned in the UK in early 2021</a>. It displays the average probability that there will be no deaths and no hospitalizations for all participants in the study, along with the number of "micromorts" which are faced by each participant in the study. Below this, a roughly comparable risk of a different type is shown.<br />
 
 The interface allows choosing whether to adjust for expected-case mortality, based on looking at a population with no comorbidities, using estimates from the location in the meta-analysis with the best possible care and treatment. It also allows varying the characteristics and number of participants to view overall risks of the study.<br />
 
