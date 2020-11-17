@@ -103,7 +103,9 @@ relative_risk_for_simulation = cbind(full_join(covariates, rr_death_hosp_age, by
 relative_risk_for_simulation['rr'] = relative_risk_for_simulation['rr_gend'] * relative_risk_for_simulation['rr_age']
 relative_risk_for_simulation[which(relative_risk_for_simulation['outc']=='hosp'),'rr']= relative_risk_for_simulation[which(relative_risk_for_simulation['outc']=='hosp'),'rr'] * relative_risk_for_simulation[which(relative_risk_for_simulation['outc']=='hosp'),'rr_hosp']
 
-relative_risk_for_simulation[c('value.death','value.hosp','rr_hosp','rr_gend','rr_age')] = NULL
+relative_risk_for_simulation[,'gend']=tolower(relative_risk_for_simulation[,'Gender'])
+relative_risk_for_simulation[c('value.death','value.hosp','rr_hosp','rr_gend','rr_age','Gender')] = NULL
+
 
 write.csv(relative_risk_for_simulation, file = "relative_risks.csv")
 

@@ -1,9 +1,10 @@
 ---
-title: "Bayesian model of COVID-19 mortality risk in HCT volunteers"
+title: "Appendix: Bayesian model of COVID-19 mortality risk in HCT volunteers"
 author: "Witold Więcek for 1 Day Sooner"
 date: "Last updated `r Sys.Date()`"
 output: 
-  bookdown::pdf_document2
+  pdf_document:
+    keep_tex: true
 bibliography: bibliography.bib
 ---
 
@@ -167,11 +168,11 @@ We used estimates originally collected by @levin_assessing_2020 to construct the
 data_ns <- df %>% group_by(Study) %>% tally() %>% pull(n)
 ```
 
-All of input data are given in Table \@ref(tab:input-data-big). The analysis dataset contains `r nrow(df)` data points from `r length(data_ns)` studies, each containing between `r min(data_ns)` and `r max(data_ns)` different age groups. We made only minimal modifications to source data, by 1) imputing the values in Italian study (__David to describe__?), 2) imputing population size in Maranhao (as ratio of the reported number of infections and the mean infection rate) which were not reported and 3) assuming that uncertainty in prevalence 0-29 age group in Iceland is same as in the 30-39 age group since data were missing.
+All of input data are given in Table \@ref(tab:input-data-big). The analysis dataset contains `r nrow(df)` data points from `r length(data_ns)` studies, each containing between `r min(data_ns)` and `r max(data_ns)` different age groups. We made only minimal modifications to source data, by 1) imputing the values from the Italian fatality data based on a seroprevalence survey, 2) imputing population size in Maranhao (as ratio of the reported number of infections and the mean infection rate) which were not reported and 3) assuming that uncertainty in prevalence 0-29 age group in Iceland is same as in the 30-39 age group since data were missing.
 
 As mentioned, our model treats number of Covid-attributable deaths as measured without error (due to lack of data) but accounts for uncertainty in infection rates, which are always model-based estimates extracted from various available data sources. In preparing data, we assumed that logits of prevalence estimates from available studies are normally distributed, which seems to reproduce majority of data very well, see Figure \@ref(fig:prevalence-data) in the Supplement. There are some discrepancies with studies that allowed for prevalence estimates to be 0, something that our logit model does not allow.
 
-For each study we construct a median age scalar defined as __David to detail this: for now leaving blank as it might change with sensitivity analyses__.
+For each study we construct a median age scalar defined by the average of the endpoints of each age range, rather than attempting to calculate a population-weighted mean.
 
 Our approach of regressing on the median age and use of all available data (rather than the subset of data available in younger adults only) is necessitated by data limitations: out of `r nrow(df_age)` data points comprising age-specific estimates of prevalence (or IFR) and counts of deaths, `r good_data_pts` contain individuals aged 20-30 who are of primary interest to us. However, the populations are mixed with regards to age, with typical age groupings such as 19-49, 20-49, 20-39, 0-49 used instead. In fact, we find only one estimate out of `r good_data_pts` that is entirely specific to the 20-29 age group (Brazilian state of Maranhao), while one more has median age falling between 20 and 30 but is not specific to that age group.
 
@@ -349,19 +350,19 @@ gridExtra::grid.arrange(grobs = list(gg + ggtitle("A") + theme(legend.position =
 
 ```
 
-## Sensitivity analyses (WORK IN PROGRESS)
+## Sensitivity analyses
 
-__WW: I WILL WORK ON THIS IN NOV-DEC 2020. ALL 4 OF THESE ARE ESSENTIAL FOR PUBLICATION (to make sure our assumptions are not distorting the results in unexpected ways)__
+<!-- __WW: I WILL WORK ON THIS IN NOV-DEC 2020. ALL 4 OF THESE ARE ESSENTIAL FOR PUBLICATION (to make sure our assumptions are not distorting the results in unexpected ways)__ -->
+
+Planned sensitivity analyses include:
 
 * Exclusion of small studies and test & trace data
 * Median age: exclusion of 80+ population (non-linear behaviour on logit IFR?)
     + Could also check exclusion of children and teenagers, due to imprecise prevalence numbers
 * Median age: different method of age imputation
-* Model with time
+* Model including time
 
 \pagebreak
-
-
 
 # Risk reduction in healthy individuals
 
@@ -671,6 +672,8 @@ df_tab <- all_data_xls %>%
   mutate(InfectionRate = round(InfectionRate, 2)) %>%
   mutate(Deaths = round(Deaths)) %>%
   mutate(Population = round(Population)) 
+
+write.csv(df_tab, file = '../ShinyApp/source_data.csv') # For the app.
 
 kbl(df_tab,  longtable = TRUE, booktabs = TRUE,
       caption = "Complete table of inputs used by the meta-analysis model and crude IFR's.",
