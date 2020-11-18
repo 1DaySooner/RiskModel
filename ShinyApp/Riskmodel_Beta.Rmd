@@ -68,6 +68,8 @@ basicFormatter <- function(Number, Mode='Pct', display_digits=3) {
 Inputs {.sidebar}
 =======================================================================
 
+<b>Trial characteristics:</b>
+
 ```{r}
 # Make the sliders
 
@@ -78,15 +80,6 @@ sliderInput(
   max = 100,
   value = 50,
   step = 1
-)
-
-sliderInput(
-  inputId = 'p_treatment', 
-  label = 'Potential Treatment Efficacy', 
-  min = 0, 
-  max = 0.9,
-  value = 0,
-  step = 0.05
 )
 
 selectInput(
@@ -103,23 +96,41 @@ selectInput(
   selected = "20 to 29"
 )
 
+
+```
+
+<b>Risk adjustment for:</b>
+
+```{r}
+
+sliderInput(
+  inputId = 'p_treatment', 
+  label = 'Potential Treatment Efficacy', 
+  min = 0, 
+  max = 0.9,
+  value = 0,
+  step = 0.05
+)
+
 checkboxInput(
 'adjustment_status', 
-'Adjust for no comorbidities', 
+'No comorbidities', 
 value = FALSE, 
 width = NULL
 )
 
 checkboxInput(
 'adjustment_population', 
-'Adjust for best-case population', 
+'Population heterogenity', 
 value = FALSE, 
 width = NULL
 )
 
-
 ```
 
+The adjustment for potential treatment, comorbidities, and population heterogeneity are explained in the "About Model" tab.
+
+<b>This does not include an estimate of longer term risks.</b> See the discussion in the "Long Term Risks" tab for more information.
 
 <!-- Notice the ====== vs. -------. These just change how the page is divided up into sections vs. rows -->
 
