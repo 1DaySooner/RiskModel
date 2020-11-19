@@ -599,7 +599,7 @@ Preprint
 <!-- Include once we have a better format for citing them.
 Data Sources for IFR Model
 =======================================================================
-```{r input-data-big}
+```{r input-data-big, eval = FALSE}
 
 df_tab <- read.csv("source_data.csv", row.names=1)
 

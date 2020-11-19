@@ -1,84 +1,27 @@
 # RiskModel
-This is a project to model the risk of a human challenge trial, supporting a journal paper in preparation.
 
-## Contents of this repository
+This is a project to model the risk of a human challenge trial for COVID-19, supporting a journal paper which is now in submission. This repo comprises (1) a Bayesian model for some of the risks associated with COVID-19 infection and (2) a Shiny app that quantifies risks associated with participation in a challenge trial.
 
-Code in this repository is written in the [R statistical language](https://www.r-project.org/), using [RStudio projects](https://rstudio.com/) both to replicate other analyses, and (planned) to simulate IFR and total risk distributions for the purpose of this paper.
-
-(Original/work in progress) workflow is as follows:
-
-1. Probabilities of death, hospitalisation, ICU severity are derived for different age brackets from French and Chinese datasets. These are located in subfolders. There is an analysis script in R, which calls on [Stan](https://mc-stan.org/).
-2. The derived probabilities (from Stan) are then saved as .csv files, such as `France_Male_p_death_` etc. in the main folder
-3. A study simulation script `Riskmodel_Alpha.R` uses the csv inputs to simulate trials and calculate risk.
-
-## (Eventual) Model Structure
-We are building a Bayesian model in MC-Stan, using rStan, to build do a meta-analysis of existing estimates of IFR which accounts for age-structure and corrects for comorbidities in the populations in question. This meta-analysis will be used as an input into the risk model (currently Riskmodel_Alpha.R,) which estimates the risks from a COVID-19 Challenge Study. of a given type.
-
-The current version uses the Salje H. et al 2020 study from 
+All parts of the repo are in active development and we expect them to change substantially.
 
 
+## Structure of this repo
 
-## General Notes on sources of error
-
-The published literature is still developing rapidly.
-
-The two published papers, in Science and Lancet Inf Dis, are not necessarily reflective of current risk as treatement has been refined and IFR seems to have declines as clinical supprt proptocols have been adapted and improved. This makes them likely to be conservative. They also do not exclude comorbidities, which would be screened out in a HCT.
-
-There is much less understanding of longer term risks of COVID-19, and a far less confident estimate of those impacts is possible. The majority of longer-term sequelae seem to be in hospitalized patients, so we can plausibly use a percentage of hospitalization rate as an upper-bound proxy.
-
-
-
-## Input papers
-
-### Published:
-- Salje H et al. Estimating the burden of SARS-CoV-2 in France. Science 10 JUL 2020 : 208-211 https://science.sciencemag.org/content/369/6500/208
--- France, Hospitalized only. Likely to undercount nursing home fatality rates.
--- Extracted model from original repository and reran.
--- IFR, Hospitalization, ICU Simulation / probability data extracted. (Now corrected to use the conditional values, per Witold.)
-
-- China (Lancet ID)
--- IFR and Hospitalization rates
--- China plus other early cases
--- Data extraction completed. Model very slow.
+1. A Bayesian model of mortality is included in `ifr-model/`. PDF summary of the model and its results is inside that folder. 
+   * Analysis is done in R. Stan package is required to run the model.
+   * The model is stand-alone (it's sufficient to only copy `ifr-model` folder); all required data is in `ifr-model/data/`
+   * To re-run the model and re-generate the outputs you can run the `Rmd` file but with `eval = FALSE` options changed to `TRUE`. By default no models are re-ran.
+2. The Shiny app is in `ShinyApp/`
+   * The app depends on outputs of `ifr-model/` which define Bayesian posteriors for some risks used by the app.
+3. Some additional data extraction is included in `Study Summary Data/`. These datasets are not used either 1 or 2 but are intended for future model extensions.
 
 
-- NY, USA (JAMA, Richardson) https://jamanetwork.com/journals/jama/fullarticle/2765184
--- Comorbidities and outcomes conditional on hospitalization.
---- Needs review for incorporation into cormorbidities analysis.
--- From 12 Hospitals in New York, 
+## Our result and publication
 
+We will update this sections once a pre-print based on this repo is online.
 
-### Preprints, reviewed:
+This is the abstract:
 
-Gianluca Rinaldi, Matteo Paradisi. An empirical estimate of the infection fatality rate of COVID-19 from the first Italian outbreak. doi: https://doi.org/10.1101/2020.04.18.20070912
--- Analysis code available, to run.
--- 
+> Human Challenge Trials (HCTs) are a potential method to accelerate development of vaccines and therapeutics. However, HCTs for COVID-19  pose ethical and practical challenges, in part due to the unclear and developing risks. In this paper, we introduce an interactive model for exploring some risks of a SARS-COV-2 dosing study, a  prerequisite for any COVID-19 challenge trials. The risk estimates we use are based on a Bayesian evidence synthesis model which can incorporate new data on infection fatality rates (IFRs) to patients, and infer rates of hospitalization. We have also created a web tool to explore risk under different study design parameters and participant scenarios. Finally, we use our model to estimate individual risk, as well as the overall mortality and hospitalization risk in a dosing study.
 
-
-### Preprints, not reviewed yet:
-
-Modi C, et al. How deadly is COVID-19? A rigorous analysis of excess mortality and age-dependent fatality rates in Italy. DOI: 10.1101/2020.04.15.20067074v3
-
-
-- Rinaldi G, Paradisi M. An empirical estimate of the infection fatality rate of COVID-19 from
-the first Italian outbreak. medRxiv. 10.1101/2020.04.18.20070912v2
--- Uses total excess mortality to infer IFR
-
-
-- Perez-Saez, Azman. Serology-informed estimates of SARS-COV-2 infection fatality risk in Geneva, Switzerland.
-
-
-
-
-"Streeck H, Schulte B, Kuemmerer B, Richter E, Hoeller T, Fuhrmann C, et al. Infection fatality
-rate of SARS-CoV-2 infection in a German community with a super-spreading event. medRxiv"
-
-Meyerowitz Katz, Merone, "A systematic review and meta-analysis of published research data on COVID-19 infection-fatality rates" medarxhiv
-
-"e: Seroconversion of a city: Longitudinal monitoring of SARS-CoV-2 seroprevalence
-2 in New York City  Stadbauer, Krammer"
-
-"Remarkable variability in SARS-CoV-2 antibodies across Brazilian
-2 regions: nationwide serological household survey in 27 states -- Hallal, victora"
-
-Estimating The Infection Fatality Rate Among Symptomatic COVID-19 Cases In The United States
+> Based on the Bayesian model we expect IFR for someone between 20 and 30 years of age to be 17.5 in 100,000, with 95% uncertainty interval from 12.8 to 23.6.  Using this estimate, we find that a simple 50-person dosing trial using younger individuals has a 99.1% (95% CI: 98.8% to 99.4%) probability of no fatalities, and a 92.8% (95% CI: 90.3% to 94.6%) probability of no cases requiring hospitalization. However, this IFR will be reduced in an HCT via screening for comorbidities, as well as providing medical care and aggressive treatment for any cases which occur, so that with stronger assumptions, we project the risk to be as low as 3.1 per 100,000, with a 99.85% (95% CI: 99.7% to 99.9%) chance of no fatalities, and a 98.7% (95% CI:  97.4% to 99.3%) probability of no cases requiring hospitalization.
