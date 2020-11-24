@@ -7,7 +7,7 @@ output:
     source_code: embed
 runtime: shiny
 resource_files:
-- Riskmodel_Beta.html
+- Riskmodel.html
 ---
 
 ```{r global, include=FALSE}
@@ -17,7 +17,7 @@ library(scales)
 library(kableExtra)
 library(tidyverse)
 library(flexdashboard)
-source("Riskmodel_Beta.R")
+source("Riskmodel.R")
 
 
 
@@ -115,7 +115,7 @@ sliderInput(
 checkboxInput(
 'adjustment_status', 
 'No comorbidities', 
-value = FALSE, 
+value = TRUE, 
 width = NULL
 )
 
@@ -418,7 +418,7 @@ renderValueBox({
   mm <- micromorts()
   valueBox(
     value = Odds(),
-    caption = paste0("95% CI: ", Odds_low(), " to ", Odds_high()),
+    caption = paste0("Average odds of Individual Death. 95% CI: ", Odds_low(), " to ", Odds_high()),
     color = c("#45497d")
   )
 })
@@ -496,7 +496,10 @@ renderPlot({
 })
 ```
 
+
 ### Micromorts
+
+Micromorts are a standard measure of mortality risk defined as a 1-in-1 million chance of death.
 
 ```{r}
 m_micromorts <-
@@ -549,10 +552,8 @@ max_y <- 500
 
 renderPlot({
   mm_tribble %>% 
-      add_row(activity="HCT Volunteer (Male)", 
-          micromorts=50, col="Participate") %>% 
-  add_row(activity="HCT Volunteer (Female)", 
-          micromorts=60, col="Participate") %>% 
+  add_row(activity="Challenge Volunteer (Male)", micromorts=m_micromorts(), col="Participate") %>%  
+  add_row(activity="Challenge Volunteer (Female)", micromorts=f_micromorts(), col="Participate") %>% 
   mutate(label_y = ifelse(micromorts > max_y, max_y, micromorts + 25)) %>%
   ggplot(aes(fct_reorder(activity, micromorts, .desc = FALSE), micromorts, fill=col)) +
   geom_col() +
