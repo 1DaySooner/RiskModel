@@ -582,6 +582,9 @@ Note that this model is appropriate for considering a dosage trial, and while th
 
 <h3>Methodology</h3>
 The underlying model estimates IFR, and hospitalization rates are based on relative risk of hospitalization and mortality from <a href="https:// science.sciencemag.org/cgi/content/full/science.abc3517">Salje et al.</a> The methodology for this preliminary, not peer reviewed risk model is detailed in a forthcoming paper, available in the "PReprint" tab above. Further details of the model, and source code for the app, can be found in <a href="https://github.com/1DaySooner/RiskModel/">our github repository</a>, along with other details.
+
+<h4>Thank you</h4>
+The 1Day Sooner Research team thanks Nir Eyal and Sophie Rose for feedback on this model, and Emily Xu, Alex Hu, and the rest of the Develop for Good team for technical and graphic design assistance.
   
 
 Long Term Risks
