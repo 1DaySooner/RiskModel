@@ -1,6 +1,6 @@
 ---
-title: "Appendix: Bayesian model of COVID-19 mortality risk in HCT volunteers"
-author: "Witold Więcek for 1 Day Sooner"
+title: "Bayesian model of COVID-19 mortality risk in HCT volunteers"
+author: "Appendix material for 'Exploring Risks of Human Challenge Trials for COVID-19'"
 date: "Last updated `r Sys.Date()`"
 output: 
   pdf_document:
@@ -15,6 +15,7 @@ library(tidyverse)
 library(readxl)
 library(knitr)
 library(kableExtra)
+library(broom.mixed)
 # Stan stuff:
 library(rstan)
 set.seed(1990)
@@ -44,7 +45,7 @@ By definition, our data on IFRs is a combination of data on deaths with data on 
 The most straight-forward and "canonical" way to implement such a Bayesian model is by modelling log odds of the event.^[It is also possible to work with $IFR_k$ parameters and treat them as derived from Beta distribution with some "hyperparameters" $\alpha$ and $\beta$ of Beta distribution, as done by e.g. @carpenter_hierarchical_2016. That approach, however, does not offer an easy way of modelling impact of covariates (e.g. age and co-morbidities) on the rates.]
 @deeks_issues_2002 present a general treatment of such approach in medical statistics. Note, that for very rare events the odds of mortality are very similar to probability of mortality, but we model events on odds scale as a good "generic" approach to modelling binary data (in this case death following infections).^[Another advantage of such a model is that it can use either individual-level or summary data and work with covariates (such as gender, age, time of the study, co-morbidities), captured as odds ratios or risk ratios. If only summary data are available, covariates can be defined as study level distributions (e.g. % male)]
 
-Basic models for this type of analysis of binary data can be implemented using existing statistical analysis packages (see, for example, _metafor_ package in R or _baggr_  by @wiecek_baggr_2020), by treating IFR as a logit-normal parameter to meta-analyse. However, note that when no deaths are observed, analysis of IFR (equal to observed deaths divided by modelled infections) is problematic. Therefore we propose a "custom" model that built in Stan which treats deaths and _prevalences_ (rather than the IFRs) as data. 
+Basic models for this type of analysis of binary data can be implemented using existing statistical analysis packages; see, for example, _metafor_ package in R or _baggr_  by @wiecek_baggr_2020. Such analysis would treat IFR as a logit-normal parameter to meta-analyse. However, note that when no deaths are observed, analysis of IFR (equal to observed deaths divided by modelled infections) is problematic. Therefore we propose a "custom" model that built in Stan which treats deaths and _prevalences_ (rather than the IFRs) as data.
 
 Let $d_k$ denote observed deaths for data point $k$ and assume that logit of corresponding prevalence estimate is $p_k$ is a parameter (typically obtained from a statistical modelling papers, government reports etc.). Total population in $k$-th setting is $n_k$. Total number of estimates is $K$. Then the model likelihood is as follows:
 
@@ -65,7 +66,7 @@ We assume the impact on IFR is on logit scale, same as in the "canonical" logist
 
 This means $\theta$ spans location-specific (random) effects on IFR while $\beta$ is $N_p$ dimensional vector of (fixed) covariate effects.
 
-We implement our model in Stan and assume weakly informative priors on all parameters, with prior for $\tau$ centered at 1 death per 10,000 cases. 
+We implement our model in Stan and assume very weakly informative priors on all parameters, with prior for $\tau$ centered at 1 death per 10,000 cases. 
 
 ```
 model {
@@ -87,24 +88,11 @@ model {
 
 
 
-
-
-
 ## Data 
 
-```{r read-data, eval = F}
-# Several different datasets.
-NBER_IFR_Benchmark_Studies <- read_excel('data/NBER_IFR_Meta_Dataset.xlsx',1)
-#Places: Belgium. Geneva, Indiana, New York, Spain, Sweden
-NBER_IFR_US_Studies <- read_excel('data/NBER_IFR_Meta_Dataset.xlsx',2, skip=1)
-names(NBER_IFR_US_Studies)[6:7]<-c('Infect 95_lower','Infect 95_upper')
-names(NBER_IFR_US_Studies)[10:11]<-c('IFR_95_lower','IFR_95_upper')
-
-# NBER_All_Studies <- read_excel('data/NBER_IFR_Meta_Dataset.xls',5)
-```
-
 ```{r read-joint-data}
-all_data_xls <- read_excel("data/1DS_Meta_Dataset_ww.xls") %>%
+all_data_xls <- read_excel("data/1DS_Meta_Dataset_15feb2021.xlsx") %>%
+# all_data_xls <- read_excel("data/1DS_Meta_Dataset_ww.xls") %>%
                            # col_types = c("text", "text", "date", "date", rep("text", 4), "numeric", "text", rep("numeric", 11))) %>%
   rename(Study = StudyName) %>%
   # Use imputed deaths and population sizes where neeeded
@@ -122,25 +110,9 @@ ifr_joint <- all_data_xls %>%
   mutate(ir = InfectionRate/100, 
          ir_low = infrate_ci95_low/100, 
          ir_high = infrate_ci95_high/100) %>%
+  mutate(ir_low = ifelse(ir_low < 0, 0, ir_low)) %>%
   select(Study, AgeGroup, Median_Age, Deaths, Population, ir, ir_low, ir_high) %>%
   mutate(dataset = "Global")
-
-# ifr_global <- NBER_IFR_Benchmark_Studies %>%
-#   group_by(Study) %>%
-#   mutate(ir = InfectionRate/100, 
-#          ir_low = infrate_ci95_low/100, 
-#          ir_high = infrate_ci95_high/100) %>%
-#   select(Study, AgeGroup, Median_Age, Deaths, Population, ir, ir_low, ir_high) %>%
-#   mutate(dataset = "Global")
-# 
-# ifr_us <- NBER_IFR_US_Studies %>%
-#   filter(!is.na(AgeGroup)) %>%
-#   group_by(Study) %>%
-#   mutate(ir = `Infection Rate (%)`/100, 
-#          ir_low = `Infect 95_lower`/100, 
-#          ir_high = `Infect 95_upper`/100) %>%
-#   select(Study, AgeGroup, Median_Age, Deaths, Population, ir, ir_low, ir_high) %>%
-#   mutate(dataset = "United States")
 ```
 
 
@@ -148,7 +120,7 @@ ifr_joint <- all_data_xls %>%
 ```{r prep-data}
 # df <- rbind(ifr_global, ifr_us) %>%
 df <- ifr_joint %>%
-  mutate(logit_sd = ifelse(ir_low != 0, 
+  mutate(logit_sd = ifelse((ir_low != 0) & (ir_high != 0) & (ir != 0),
                          (logit(ir_high) - logit(ir_low))/(2*1.96), 
                          (logit(ir_high) - logit(ir))/1.96)) %>%
   mutate(logit_mean = logit(ir)) %>%
@@ -177,17 +149,21 @@ For each study we construct a median age scalar defined by the average of the en
 Our approach of regressing on the median age and use of all available data (rather than the subset of data available in younger adults only) is necessitated by data limitations: out of `r nrow(df_age)` data points comprising age-specific estimates of prevalence (or IFR) and counts of deaths, `r good_data_pts` contain individuals aged 20-30 who are of primary interest to us. However, the populations are mixed with regards to age, with typical age groupings such as 19-49, 20-49, 20-39, 0-49 used instead. In fact, we find only one estimate out of `r good_data_pts` that is entirely specific to the 20-29 age group (Brazilian state of Maranhao), while one more has median age falling between 20 and 30 but is not specific to that age group.
 
 ```{r stan-data}
-mm <- model.matrix(ir ~ Study + Median_Age, data = df)
-stan_data <- list(
-  X = matrix(df$Median_Age/10 - 2.5, nrow(df), 1),
-  N = nrow(df), 
-  Np = 1,
-  Nloc = length(unique(df$Study)),
-  loc = as.numeric(as.factor(df$Study)),
-  mean_prevalence = df$logit_mean,
-  sd_prevalence = df$logit_sd,
-  population = as.integer(df$Population),
-  obs_deaths = as.integer(df$Deaths))
+prep_stan_data <- function(df) {
+  mm <- model.matrix(ir ~ Study + Median_Age, data = df)
+  list(
+    X = matrix(df$Median_Age/10 - 2.5, nrow(df), 1),
+    N = nrow(df), 
+    Np = 1,
+    Nloc = length(unique(df$Study)),
+    loc = as.numeric(as.factor(df$Study)),
+    mean_prevalence = df$logit_mean,
+    sd_prevalence = df$logit_sd,
+    population = as.integer(df$Population),
+    obs_deaths = as.integer(df$Deaths))
+}
+
+stan_data <- prep_stan_data(df)
 ```
 
 
@@ -196,13 +172,13 @@ stan_data <- list(
 
 ```{r run-stan-model, eval = FALSE}
 fit <- sampling(sm, data = stan_data, control = list(max_treedepth = 15), 
-                iter = 5000, refresh = 0,
+                iter = 5000, refresh = 0, seed = 1990,
                 pars = c("logit_ifr", "logit_prevalence"), include = FALSE)
-saveRDS(fit, file = "output/main_stan_model.rds")
+saveRDS(fit, file = "output/main_stan_model_15feb2021.rds")
 ```
 
 ```{r}
-fit <- readRDS("output/main_stan_model.rds")
+fit <- readRDS("output/main_stan_model_15feb2021.rds")
 ```
 
 There were no issues with convergence of the Bayesian model. We set number of iterations to 5,000 and used 4 chains, with `max_treedepth` option set to 15. There were no divergent transitions and effective sample size was greater than `r round(min(summary(fit)$summary[,"n_eff"]))` for all of `r length(summary(fit)$summary[,"n_eff"]) - 1` modeled parameters (this number includes fitted prevalences, IFRs, $\theta$'s and their transformations into/from logit scales). For the three main parameters in the model we obtained the following:
@@ -269,14 +245,15 @@ df_cov <- data.frame(study = df$Study,
 
 We constructed posterior predictive distributions for number of deaths in each of the inputs by using the `generated quantities` functionality of Stan. Figure \@ref(fig:obs-est-deaths) compares the posterior means and 95% intervals with observed deaths. Out of `r df_cov$n` observations that were used to fit the model, `r df_cov$coverage975` were within 95% intervals of the posterior predictive distributions. We observed the largest discrepancies occurred in Spanish data. Overall, we conclude that the simple binomial model we used here is flexible enough to capture both age-specific risk increases and heterogeneity in IFRs across settings/countries. 
 
-```{r obs-est-deaths, fig.width = 10, fig.height = 10, fig.cap = "Comparison of model estimates (black) with data on observed fatality rate (FR, red), compared on logarithmic scale. FR is number of deaths divided by overall population size. Bars are 95% posterior interval; point is the mean. For better clarity, we grouped the plot into four panels according to observed FR X axes on each panel differ. For many low-risk populations (upper-left quadrant) no deaths were reported: we indicate this by plotting a red point on the left-hand side of the panel plot.", warning = FALSE}
+```{r obs-est-deaths, fig.width = 10, fig.height = 13, fig.cap = "Comparison of model estimates (black) with data on observed fatality rate (FR, red), compared on logarithmic scale. FR is number of deaths divided by overall population size. Bars are 95% posterior interval; point is the mean. For better clarity, we grouped the plot into four panels according to observed FR X axes on each panel differ. For many low-risk populations (upper-left quadrant) no deaths were reported: we indicate this by plotting a red point on the left-hand side of the panel plot.", warning = FALSE}
 data.frame(study = df$Study, 
            age = df$AgeGroup,
            observed = df$Deaths,
            summary(fit, "ppc_deaths")$summary) %>% 
   mutate_if(is.numeric, function(x) x/df$Population) %>%
-  mutate(deaths_cut = cut(observed, c(-Inf, 1/1e06, 50/1e06, 500/1e06, Inf),
-                          c("< 1 per million", "1-50 per million", "50-500 per million", "over 500 per million"))) %>%
+  mutate(deaths_cut = cut(observed, c(-Inf, 5/1e06, 50/1e06, 500/1e06, Inf),
+                          c("<5 deaths per million", "5-50 deaths per million", 
+                            "50-500 deaths per million", "> 500 deaths per million"))) %>%
   ggplot(aes(y=interaction(study, age))) + 
   geom_point(aes(x = mean)) + 
   geom_errorbarh(aes(xmin = X2.5., xmax = X98.)) + 
@@ -346,21 +323,67 @@ gridExtra::grid.arrange(grobs = list(gg + ggtitle("A") + theme(legend.position =
                         ncol = 1)
 ```
 
-```{r}
-
-```
-
 ## Sensitivity analyses
 
-<!-- __WW: I WILL WORK ON THIS IN NOV-DEC 2020. ALL 4 OF THESE ARE ESSENTIAL FOR PUBLICATION (to make sure our assumptions are not distorting the results in unexpected ways)__ -->
+As a sensitivity analysis, we also considered the impact on the main model parameters 
+of dropping some data from our analysis. The result is summarised in a table containing
+parameters $\sigma$, $\beta$, $\tau$ and the mean IFR for the 20-29 year olds age group. 
 
-Planned sensitivity analyses include:
+We considered excluding data for the youngest and the oldest individuals, as well as excluding 
+both at once. Our hypothesis was that at extreme ends of age the assumption of log-linearity
+of IFRs may not hold and potentially lead to a biased estimate of the IFR in the 20-29 and 20-39 age groups.
+However, as shown in the accompanying table, we find no substantial effect of excluding data on the main model paramters.
 
-* Exclusion of small studies and test & trace data
-* Median age: exclusion of 80+ population (non-linear behaviour on logit IFR?)
-    + Could also check exclusion of children and teenagers, due to imprecise prevalence numbers
-* Median age: different method of age imputation
-* Model including time
+```{r}
+alt_df_c <- lst(
+  "Median age over 10" = filter(df, Median_Age > 10),
+  "Median age under 75" = filter(df, Median_Age < 75),
+  "Median age between 10 and 75" = filter(df, Median_Age > 10, Median_Age < 75),
+)
+```
+
+```{r, eval=FALSE}
+alt_df <- lst(
+  "Median age over 10" = filter(df, Median_Age > 10),
+  "Median age under 75" = filter(df, Median_Age < 75),
+  "Median age between 10 and 75" = filter(df, Median_Age > 10, Median_Age < 75),
+)
+
+alt_df_fits <- alt_df %>%
+  lapply(prep_stan_data) %>%
+  lapply(function(x) sampling(sm, data = x, control = list(max_treedepth = 15), 
+                              iter = 5000, refresh = 0, seed = 1990,
+                              pars = c("logit_ifr", "logit_prevalence"), include = FALSE))
+save(alt_df, alt_df_fits, file="output/alternative_stan_models_15feb2021.Rdata")
+```
+
+```{r}
+
+load("output/alternative_stan_models_15feb2021.Rdata")
+if(!identical(alt_df, alt_df_c))
+  stop("Input data has changed since the last run of the models")
+
+alt_df_fits[["All data (main model)"]] <- fit
+```
+
+```{r}
+lapply(alt_df_fits, function(x) {
+  hp <- 1e03*inv_logit(rstan::extract(x, "tau")[[1]])
+  rbind(
+    broom.mixed::tidyMCMC(x, c("tau", "sigma", "beta")),
+    data.frame(term = "ifr", estimate = mean(hp), std.error = sd(hp))
+  )
+}) %>%
+  bind_rows(.id = "model") %>%
+  mutate(value = paste0(sprintf("%.2f", estimate), " (", sprintf("%.2f", std.error), ")")) %>%
+  select(-estimate, -std.error) %>%
+  mutate(term = factor(term, levels = c("tau", "sigma", "beta", "ifr"))) %>%
+  spread(term, value) %>%
+  knitr::kable(align = c("l", "r", "r", "r", "r"),
+      caption = "Main parameters in the sensitivity analysis models using subsets of data.",
+      col.names = c("Included data", "beta", "sigma", "tau", "IFR in 20-29 year olds (per 1,000)"))
+```
+
 
 \pagebreak
 
@@ -501,6 +524,7 @@ stan_data <-
 
 sm_como5 <- stan_model("rr_comorbidities_v5.stan")
 fit_como5 <- sampling(sm_como5, data = stan_data, 
+                      seed = 1990,
                       refresh = 0, iter = 5000, control = list(adapt_delta = .99, max_treedepth = 15))
 saveRDS(fit_como5, file = "output/como_stan_model_v6.rds")
 ```
@@ -615,8 +639,6 @@ output_df <- data.frame(
   )
 
 attach(output_df, warn.conflicts = FALSE)
-# summary(output_df)
-
 ```
 
 In conclusion, the implications of the model for the risk in healthy young subjects are as follows:
@@ -637,13 +659,13 @@ write.csv(output_df, file = "output/bayesian-posteriors-shiny.csv")
 
 \pagebreak
 
-```{r prevalence-data, fig.cap = "Comparison of model-estimated prevalences (95% CI's reported by modelling studies) collected by @levin_assessing_2020 and our distributional assumptions: additional circles show 95% CIs recreated by assuming logit-normal distribution of prevalence. We group studies into 4 bands of mortality to mirror earlier figures. Please note that this approach produces discrepancies in a number of US estimates where the confidence intervals were skewed toward including 0. However, since we do not have access to source data, we decided to use the logit-normal assumption for all estimates. This assumption may have an effect of overestimating mortality risk in settings where prevalence was very low.", fig.height = 9.5, fig.width = 9.5, warning = FALSE}
+```{r prevalence-data, fig.cap = "Comparison of model-estimated prevalences (95% CI's reported by modelling studies) collected by @levin_assessing_2020 and our distributional assumptions: additional circles show 95% CIs recreated by assuming logit-normal distribution of prevalence. We group studies into 4 bands of mortality to mirror earlier figures. Please note that this approach produces discrepancies in a number of US estimates where the confidence intervals were skewed toward including 0. However, since we do not have access to source data, we decided to use the logit-normal assumption for all estimates. This assumption may have an effect of overestimating mortality risk in settings where prevalence was very low.", fig.height = 11.5, fig.width = 9.5, warning = FALSE}
 df %>% 
   mutate(midpoint_u = logit_mean + logit_sd*1.96, midpoint_l = logit_mean - logit_sd*1.96) %>%
   mutate(Median_Age = ifelse(is.na(Median_Age), 0, Median_Age)) %>%
-  mutate(deaths_cut = cut(Deaths/Population, c(-Inf, 1/1e06, 50/1e06, 500/1e06, Inf),
-                          c("< 1 per million", "1-50 per million", "50-500 per million", "over 500 per million"))) %>%
-  
+    mutate(deaths_cut = cut(Deaths/Population, c(-Inf, 5/1e06, 50/1e06, 500/1e06, Inf),
+                          c("<5 deaths per million", "5-50 deaths per million", 
+                            "50-500 deaths per million", "> 500 deaths per million"))) %>%
   ggplot(aes(x=ir, xmax = ir_high, xmin=ir_low, y=interaction(Study, AgeGroup))) + 
   geom_point() + geom_errorbarh() +
   geom_point(aes(x = inv_logit(midpoint_l)), pch = 21) +
@@ -675,12 +697,14 @@ df_tab <- all_data_xls %>%
 
 write.csv(df_tab, file = '../ShinyApp/source_data.csv') # For the app.
 
-kbl(df_tab,  longtable = TRUE, booktabs = TRUE,
+df_tab %>%
+  select(-StudyType) %>%
+  kbl(longtable = TRUE, booktabs = TRUE,
       caption = "Complete table of inputs used by the meta-analysis model and crude IFR's.",
-      col.names = c("Study location", "Scale", "Type", "End date", "Age", 
+      col.names = c("Study location", "Scale", "End date", "Age", 
                     "Deaths", "N", "Mean", "2.5%", "97.5%", "IFR/100k"))%>%
   kable_styling(latex_options = c("repeat_header")) %>%
-  add_header_above(c(" " = 7, "Infection rate (%)" = 3, " " = 1)) %>%
+  add_header_above(c(" " = 6, "Infection rate (%)" = 3, " " = 1)) %>%
   landscape()
   
 ```
