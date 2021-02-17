@@ -5,6 +5,7 @@ date: "Last updated `r Sys.Date()`"
 output: 
   bookdown::pdf_document2:
     keep_tex: true
+    latex_engine: xelatex
 bibliography: bibliography.bib
 ---
 
@@ -175,14 +176,17 @@ stan_data <- prep_stan_data(df)
 
 
 ```{r run-stan-model, eval = FALSE}
+stan_data_archived <- stan_data
 fit <- sampling(sm, data = stan_data, control = list(max_treedepth = 15), 
                 iter = 5000, refresh = 0, seed = 1990,
                 pars = c("logit_ifr", "logit_prevalence"), include = FALSE)
-saveRDS(fit, file = "output/main_stan_model_15feb2021.rds")
+save(fit, stan_data_archived, file = "output/main_stan_model_15feb2021.Rdata")
 ```
 
 ```{r}
-fit <- readRDS("output/main_stan_model_15feb2021.rds")
+load("output/main_stan_model_15feb2021.Rdata")
+if(!identical(stan_data, stan_data_archived))
+  stop("Input data into models does not match")
 ```
 
 There were no issues with convergence of the Bayesian model. We set number of iterations to 5,000 and used 4 chains, with `max_treedepth` option set to 15. There were no divergent transitions and effective sample size was greater than `r round(min(summary(fit)$summary[,"n_eff"]))` for all of `r length(summary(fit)$summary[,"n_eff"]) - 1` modeled parameters (this number includes fitted prevalences, IFRs, $\theta$'s and their transformations into/from logit scales). For the three main parameters in the model we obtained the following:
@@ -348,7 +352,7 @@ alt_df_c <- lst(
 )
 ```
 
-```{r, eval=FALSE}
+```{r, eval = FALSE}
 alt_df <- lst(
   "Median age over 10" = filter(df, Median_Age > 10),
   "Median age under 75" = filter(df, Median_Age < 75),
@@ -688,10 +692,10 @@ df %>%
 
 \pagebreak
 
-```{r input-data-big}
+```{r input-data-studies}
 df_tab <- all_data_xls %>% 
   arrange(Median_Age, Study) %>%
-  select(Study, StudyScale, StudyType, EndDate, 
+  select(Study, StudyID, StudyType, EndDate, 
          AgeGroup, 
          Deaths, 
          Population, InfectionRate, infrate_ci95_high, infrate_ci95_low) %>%
@@ -705,18 +709,40 @@ df_tab <- all_data_xls %>%
   mutate(Deaths = round(Deaths)) %>%
   mutate(Population = round(Population)) 
 
+df_tab_joint <- df_tab %>% group_by(Study, EndDate) %>% 
+  summarise(age = paste(unique(AgeGroup), collapse = ", "), 
+            deaths = sum(Deaths), 
+            population = sum(Population), 
+            IFR = sum(InfectionRate*Population)/sum(Population),
+            .groups = "keep")
+
+study_xref <- all_data_xls %>% select(Study, StudyID) %>% distinct()
+
 write.csv(df_tab, file = '../ShinyApp/source_data.csv') # For the app.
+write.csv(df_tab_joint, file = '../ShinyApp/source_data_studies.csv') # For the app.
+  
+df_tab_joint %>%
+  kbl(longtable = TRUE, booktabs = TRUE, 
+      caption = "Complete table of studies used by the meta-analysis model.",
+      col.names = c("Study", "End date", "Age groups", 
+                    "Deaths", "N", "IR per 100"))%>%
+  kable_styling(latex_options = c("repeat_header")) %>%
+  column_spec(3, width = "4cm")
+
+```
+`r paste(paste0(study_xref$Study, ": ", paste0("@", study_xref$StudyID)), collapse = ", ")`
+
+```{r  input-data-big}
 
 df_tab %>%
-  select(-StudyType) %>%
-  kbl(longtable = TRUE, booktabs = TRUE,
+  mutate(StudyID = paste0("@", StudyID)) %>%
+  select(-StudyType, -EndDate, -StudyID) %>%
+  kbl(longtable = TRUE, booktabs = TRUE, 
       caption = "Complete table of inputs used by the meta-analysis model and crude IFR's.",
-      col.names = c("Study location", "Scale", "End date", "Age", 
+      col.names = c("Study location", "Age", 
                     "Deaths", "N", "Mean", "2.5%", "97.5%", "IFR/100k"))%>%
   kable_styling(latex_options = c("repeat_header")) %>%
-  add_header_above(c(" " = 6, "Infection rate (%)" = 3, " " = 1)) %>%
-  landscape()
-  
+  add_header_above(c(" " = 4, "Infection rate (%)" = 3, " " = 1))
 ```
 
 \pagebreak
