@@ -3,7 +3,7 @@ title: "Bayesian model of COVID-19 mortality risk in HCT volunteers"
 author: "Appendix material for 'Exploring Risks of Human Challenge Trials for COVID-19'"
 date: "Last updated `r Sys.Date()`"
 output: 
-  pdf_document:
+  bookdown::pdf_document2:
     keep_tex: true
 bibliography: bibliography.bib
 ---
@@ -27,7 +27,7 @@ options(mc.cores = 4, digits = 2)
 
 # Introduction
 
-This short document is a technical appendix to the paper discussing COVID-19 risks in human challenge trial. Here, we show how a Bayesian model can synthesise information on many infection fatality rates (IFRs) into a single estimate. This estimate is  specific to certain age groups and can be further adjusted by e.g. co-morbidity status. The analysis presented here is a form of Bayesian meta-analysis , in that our primary objective is to weigh sources of evidence in a way that captures both variability (here, heterogeneity in real IFRs across different settings) and uncertainty (here, the fact that we do not know the IFRs in each setting precisely).
+This short document is a technical appendix to the paper discussing COVID-19 risks in human challenge trial. Here, we show how a Bayesian model can synthesise information on many infection fatality risks (IFRs) into a single estimate. This estimate is  specific to certain age groups and can be further adjusted by e.g. co-morbidity status. The analysis presented here is a form of Bayesian meta-analysis , in that our primary objective is to weigh sources of evidence in a way that captures both variability (here, heterogeneity in real IFRs across different settings) and uncertainty (here, the fact that we do not know the IFRs in each setting precisely).
 
 The ultimate objective of this model is to  characterise risk in a way that is useful for design of HCTs. Therefore, as a minimum, we want to incorporate variability across different populations into our prediction. Even better would be to understand how different factors can drive heterogeneity: _a priori_ we hypothesise that the three main drivers of differences in IFRs are time-specific, population-specific and otherwise country-specific.^[The role of time may be due to new treatments, improvements over time in our ability to treat COVID-19 or selection pressures which may lead to more benign versions of the virus. Country-specific or location-specific factors in IFR data may be driven by under-reporting, health care factors (including access to health care services) or underlying distributions of known risk factors. Additionally, some unknown risk factors (e.g. genetic) may also be operating, in which case controlling for age and co-morbidities will be not sufficient to account for cross-location differences.]
 
@@ -134,15 +134,19 @@ df_age <- df %>% mutate(age = gsub("\\+", "-Inf", AgeGroup)) %>%
 good_data_pts <- sum(df_age$ageMin < 30 & df_age$ageMax > 20)
 ```
 
-We used estimates originally collected by @levin_assessing_2020 to construct the first version of analysis dataset, which we then supplemented with more values extracted from other studies. __Write-up of data collection here OR REFERENCE DATA COLLECTION ELSEWHERE.__ The input data into our model consists of deaths (treated as known) and prevalences (treated as logit-distributed parameter with known mean and SD) in all reported age groups in all studies^[This basic approach exaggerates uncertainty, as we treat different 95% intervals reported in the study as uncorrelated.]. 
+We used estimates originally collected by @levin_assessing_2020 to construct the first version of analysis dataset, which we then supplemented with more values extracted from other studies. 
+
+We included all relevant data points from the Levin et al. study This meant sometimes including values that the original study omitted. For example, Levin et al. exclude data points with seroprevalence indistinguishable from zero; our model retains them. We systematically went through the included studies listed in Appendix I of Levin et al. to ensure complete inclusion of all their data. In addition, in the course of this process we because aware of either updates to the studies Levin et al. used or entirely new relevant studies. We have reviewed and included them in our model as well.
+
+The input data into our model consists of deaths (treated as known) and prevalences (treated as logit-distributed parameter with known mean and SD) in all reported age groups in all studies^[This basic approach potentially exaggerates uncertainty, as we treat different 95% intervals reported in the study as uncorrelated.]. 
 
 ```{r}
 data_ns <- df %>% group_by(Study) %>% tally() %>% pull(n)
 ```
 
-All of input data are given in Table \@ref(tab:input-data-big). The analysis dataset contains `r nrow(df)` data points from `r length(data_ns)` studies, each containing between `r min(data_ns)` and `r max(data_ns)` different age groups. We made only minimal modifications to source data, by 1) imputing the values from the Italian fatality data based on a seroprevalence survey, 2) imputing population size in Maranhao (as ratio of the reported number of infections and the mean infection rate) which were not reported and 3) assuming that uncertainty in prevalence 0-29 age group in Iceland is same as in the 30-39 age group since data were missing.
+All of input data are given in Table \@ref(tab:input-data-big). The analysis dataset contains `r nrow(df)` data points from `r length(data_ns)` studies, each containing between `r min(data_ns)` and `r max(data_ns)` different age groups. We made only minimal modifications to source data, by 1) imputing the values from the Italian fatality data based on a seroprevalence survey, 2) imputing population size in Maranhao (as ratio of the reported number of infections and the mean infection risk) which were not reported and 3) assuming that uncertainty in prevalence 0-29 age group in Iceland is same as in the 30-39 age group since data were missing.
 
-As mentioned, our model treats number of COVID-attributable deaths as measured without error (due to lack of data) but accounts for uncertainty in infection rates, which are always model-based estimates extracted from various available data sources. In preparing data, we assumed that logits of prevalence estimates from available studies are normally distributed, which seems to reproduce majority of data very well, see Figure \@ref(fig:prevalence-data) in the Supplement. There are some discrepancies with studies that allowed for prevalence estimates to be 0, something that our logit model does not allow.
+As mentioned, our model treats number of COVID-attributable deaths as measured without error (due to lack of data) but accounts for uncertainty in infection risks, which are always model-based estimates extracted from various available data sources. In preparing data, we assumed that logits of prevalence estimates from available studies are normally distributed, which seems to reproduce majority of data very well, see Figure \@ref(fig:prevalence-data) in the Supplement. There are some discrepancies with studies that allowed for prevalence estimates to be 0, something that our logit model does not allow.
 
 For each study we construct a median age scalar defined by the average of the endpoints of each age range, rather than attempting to calculate a population-weighted mean.
 
@@ -205,7 +209,7 @@ hyperifr     <- inv_logit(hypermean)
 replications <- inv_logit(rnorm(nsamples, hypermean, hypersd))
 ```
 
-Since we centered our `MedianAge` at 25 years in constructing our matrix $X$, we can now obtain model-estimated risk for a typical HCT population (aged 20 to 30, with median 25) by ignoring the $\beta$ coefficient and examining $\tau$ and $\sigma$ only. We find that the average IFR for this group (equal to $\frac{\exp{(\tau)}}{\exp{(1 + \tau)}}$) is `r mean(hyperifr)` (with 95% interval from `r quantile(hyperifr, .025)` to `r quantile(hyperifr, .975)`). That means, on average, slightly under 2 deaths per 10,000 infections in the studied datasets.
+Since we centered our `MedianAge` at 25 years in constructing our matrix $X$, we can now obtain model-estimated risk for a typical HCT population (aged 20 to 30, with median 25) by ignoring the $\beta$ coefficient and examining $\tau$ and $\sigma$ only. We find that the average IFR for this group (equal to $\frac{\exp{(\tau)}}{\exp{(1 + \tau)}}$) is `r mean(hyperifr)` (with 95% interval from `r quantile(hyperifr, .025)` to `r quantile(hyperifr, .975)`). 
 
 
 ### Heterogeneity in IFRs
@@ -245,7 +249,7 @@ df_cov <- data.frame(study = df$Study,
 
 We constructed posterior predictive distributions for number of deaths in each of the inputs by using the `generated quantities` functionality of Stan. Figure \@ref(fig:obs-est-deaths) compares the posterior means and 95% intervals with observed deaths. Out of `r df_cov$n` observations that were used to fit the model, `r df_cov$coverage975` were within 95% intervals of the posterior predictive distributions. We observed the largest discrepancies occurred in Spanish data. Overall, we conclude that the simple binomial model we used here is flexible enough to capture both age-specific risk increases and heterogeneity in IFRs across settings/countries. 
 
-```{r obs-est-deaths, fig.width = 10, fig.height = 13, fig.cap = "Comparison of model estimates (black) with data on observed fatality rate (FR, red), compared on logarithmic scale. FR is number of deaths divided by overall population size. Bars are 95% posterior interval; point is the mean. For better clarity, we grouped the plot into four panels according to observed FR X axes on each panel differ. For many low-risk populations (upper-left quadrant) no deaths were reported: we indicate this by plotting a red point on the left-hand side of the panel plot.", warning = FALSE}
+```{r obs-est-deaths, fig.width = 6, fig.height = 8, fig.cap = "Comparison of model estimates (black) with data on observed fatality risk (FR, red), compared on logarithmic scale. FR is number of deaths divided by overall population size. Bars are 95% posterior interval; point is the mean. For better clarity, we grouped the plot into four panels according to observed FR X axes on each panel differ. For many low-risk populations (upper-left quadrant) no deaths were reported: we indicate this by plotting a red point on the left-hand side of the panel plot.", warning = FALSE}
 data.frame(study = df$Study, 
            age = df$AgeGroup,
            observed = df$Deaths,
@@ -254,13 +258,15 @@ data.frame(study = df$Study,
   mutate(deaths_cut = cut(observed, c(-Inf, 5/1e06, 50/1e06, 500/1e06, Inf),
                           c("<5 deaths per million", "5-50 deaths per million", 
                             "50-500 deaths per million", "> 500 deaths per million"))) %>%
-  ggplot(aes(y=interaction(study, age))) + 
+  mutate(ylab = interaction(substr(study, 1, 12), age)) %>%
+  ggplot(aes(y=ylab)) + 
   geom_point(aes(x = mean)) + 
   geom_errorbarh(aes(xmin = X2.5., xmax = X98.)) + 
   geom_point(aes(x = observed), color = "red") + 
   facet_wrap(~deaths_cut, ncol = 2, scales = "free") +
   scale_x_log10() +
-  xlab("COVID-attributable fatality rate") + ylab("")
+  xlab("COVID-attributable fatality risk") + ylab("") +
+  theme_grey(base_size = 9)
 ```
 
 ```{r}
@@ -292,7 +298,7 @@ df_ifr <-
 
 ```
 
-```{r ifr-plot, fig.cap = "IFR as a function of age. Narrower ribbon corresponds to the 95% posterior interval of average across all included studies (tau parameter in the meta-analysis model), while the wider band takes into account heterogeneity (tau and sigma). Lines are means. Red points are model estimates of mean IFRs in partciular studies, with bars representing 95% posterior intervals. Panel A is untransformed data. Panel B shows the same data on log 10 scale.", fig.height = 10, fig.width = 8}
+```{r ifr-plot, fig.cap = "IFR as a function of age. Narrower ribbon corresponds to the 95% posterior interval of average across all included studies (tau parameter in the meta-analysis model), while the wider band takes into account heterogeneity (tau and sigma). Lines are means. Red points are model estimates of mean IFRs in partciular studies, with bars representing 95% posterior intervals. Panel A is untransformed data. Panel B shows the same data on log 10 scale.", fig.height = 8, fig.width = 6}
 
 
 gg <- df_rep %>% 
@@ -312,10 +318,10 @@ gg <- df_rep %>%
   geom_errorbar(data = df_ifr, color = "red", show.legend=FALSE) +
   scale_fill_grey() +
   guides(fill = FALSE) +
-  theme_minimal() +
-  theme(legend.position = "bottom", legend.title = element_blank()) +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "bottom", legend.direction = "vertical", legend.title = element_blank()) +
   guides(colour = FALSE) +
-  ylab("Infection fatality rate") +
+  ylab("Infection fatality risk") +
   coord_cartesian(xlim = c(0.1, 80), ylim = c(1e-6, .2))
 
 gridExtra::grid.arrange(grobs = list(gg + ggtitle("A") + theme(legend.position = "none"), 
@@ -448,7 +454,7 @@ como_df <- stan_df %>%
   mutate(m = f/p) 
 ```
 
-```{r open-safely-age, fig.width = 5, fig.height = 3, warning = F, fig.cap = "Fatality rates as a function of age in OpenSAFELY data. Fatality rate is zero in the 0-10 and 10-20 age groups."}
+```{r open-safely-age, fig.width = 5, fig.height = 3, warning = F, fig.cap = "Fatality risks as a function of age in OpenSAFELY data. Fatality risk is zero in the 0-10 and 10-20 age groups."}
 open_safely_df_long %>%
   mutate(group = factor(group, levels = c("all", "como", "healthy"),
                         labels = c("All", "With comorbidities", "W/o comorbidities"))) %>%
@@ -460,7 +466,7 @@ open_safely_df_long %>%
              color = group)) +
   geom_point() +
   geom_line() +
-    xlab("Age") + ylab("Fatality rate") +
+    xlab("Age") + ylab("Fatality risk") +
   theme_minimal() +
   scale_y_log10() +
   theme(legend.position = "right", legend.direction = "vertical", 
@@ -470,16 +476,16 @@ open_safely_df_long %>%
 
 As shown in Table \@ref(tab:open-safely-tab), for the age group of 20-29 the crude risk ratio (of general population vs the healthy subset only) is 1.53, but, due to low number of events in both healthy and general population, with a very wide 95% interval from 0.6 to 5.65.^[We obtain the interval using a simulation approach. Using normal approximation of log(RR) statistic we obtain a narrower 0.57 to 4.1, perhaps due to poor quality of approximation for rare events.] As data on relative risks in other age groups is clearly related to the relative risk in 20-29 age group, we use another meta-analysis model to improve our estimate. Additionally, relative risks are higher in women than in men -- something that we can account for in our model too.
 
-In our modelling we make a strong assumption that infection rates in population with comorbidities are the same as in the general population. In other words, we assume that denominator for IFR is same in both populations. We then specify a generic partial pooling model of fatality rates (FR, defined as number of deaths in the entire population, without regards to infection status) such that
+In our modelling we make a strong assumption that infection risks in population with comorbidities are the same as in the general population. In other words, we assume that denominator for IFR is same in both populations. We then specify a generic partial pooling model of fatality risks (FR, defined as number of deaths in the entire population, without regards to infection status) such that
 
 \begin{align}
 \text{logit}(\text{FR}_k) & \sim \mathcal{N}(\alpha_{\text{age}_k} \text{comorb}_k + \beta \text{male}_k + \gamma_{\text{age}_k}), \\
 \alpha_i & \sim \mathcal{N}(\mu, \sigma) \text{ for all } i,
 \end{align}
 
-where, for $k$-th observation, $\text{age}_k$ is the age group, and $\text{comorb}_k$ and $\text{male}_k$ are indicator variables. This means that each age group is assigned different "baseline" fatality rates.
+where, for $k$-th observation, $\text{age}_k$ is the age group, and $\text{comorb}_k$ and $\text{male}_k$ are indicator variables. This means that each age group is assigned different "baseline" fatality risks.
 
-Note that the assumption of FRs varying across age groups that we just mentioned differs from the model of age-specific IFRs in Section 2. This is because we hypothesised that infection rates (which are used as denominators in the IFR model of Section 2) will vary across age groups. This is borne out by Figure \@ref(fig:open-safely-age). 
+Note that the assumption of FRs varying across age groups that we just mentioned differs from the model of age-specific IFRs in Section 2. This is because we hypothesised that infection risks (which are used as denominators in the IFR model of Section 2) will vary across age groups. This is borne out by Figure \@ref(fig:open-safely-age). 
 
 ```{r open-safely-tab}
 como_df %>% 
@@ -570,7 +576,7 @@ Next, using the posterior samples we calculate the event rate in total populatio
 
 To validate the model, we conducted a simple posterior predictive check for numbers of deaths in different age groups and genders. The graphical check is presented in Figure \@ref(fig:open-safely-ppc). Overall we find that the simple model has no problem with reproducing observed data.
 
-```{r open-safely-ppc, fig.width = 8, fig.height = 7, fig.cap = "Comparison of posterior predictive numbers of deaths from the fitted Bayesian model (mean and 95% uncertainty intervals) with data inputs (circles). For each age grouping we have 4 estimates: male/female and healthy vs general population"}
+```{r open-safely-ppc, fig.width = 6, fig.height = 6, fig.cap = "Comparison of posterior predictive numbers of deaths from the fitted Bayesian model (mean and 95% uncertainty intervals) with data inputs (circles). For each age grouping we have 4 estimates: male/female and healthy vs general population"}
 open_safely_df_long %>%
   filter(group != "all") %>% 
   mutate(lci = summary(fit_como, "Nevent_ppc")$summary[,"2.5%"],
@@ -586,7 +592,7 @@ open_safely_df_long %>%
   geom_errorbar(aes(ymin = lci, ymax = uci, lty = group), width = 0) +
   facet_wrap(~ Age_min, scales = "free") +
   xlab("") + ylab("N deaths")+
-  theme_minimal() +
+  theme_minimal(base_size = 9) +
   theme(legend.position = c(1, 0),
         legend.justification = c(1, 0),
         axis.text.x = element_blank())
@@ -643,10 +649,12 @@ attach(output_df, warn.conflicts = FALSE)
 
 In conclusion, the implications of the model for the risk in healthy young subjects are as follows:
 
+
 * We find that average IFR in 20-29 age group for the studies included in this analysis is `r mean(metaanalysis_ifr_25)` with 95% interval from `r lci(metaanalysis_ifr_25)` to `r uci(metaanalysis_ifr_25)`.
     + It is feasible that the mean IFR can be decreased as much as `r mean(exp(2*hypersd))`-fold ($2\sigma$ impact on the IFR according to hyper-SD parameter in the meta-analysis model). 
     + It is easy to argue that a HCT designer would be able to achieve IFR at least as low as within any of the large-scale studies included in our sample of populations. The smallest posterior mean for 20-29 year olds is `r inv_logit(min(theta_mean))`, fitted to data from `r names(theta_mean)[which.min(theta_mean)]`.
     + Extending the HCT population to also include 30-39 year olds would lead to mean IFR of `r mean(metaanalysis_ifr_30)` with 95% interval from `r lci(metaanalysis_ifr_30)` to `r uci(metaanalysis_ifr_30)`. Lowest mean IFR would then be `r mean(ifr_min_30)` (also in `r names(theta_mean)[which.min(theta_mean)]`).
+* In the general population the risk rises by the factor or `r mean(exp(beta))` per each decade of age, with 95% interval from `r lci(exp(beta))` to `r uci(exp(beta))`.
 * In healthy population (defined as lack of co-morbidities listed above), the average mortality risk in 20-29 year olds is `r mean(rr_healthy_25)` times lower than in the general population, with 95% uncertainty interval from `r lci(rr_healthy_25)` to `r uci(rr_healthy_25)`.
     + Our `r mean(rr_healthy_25)` estimate is a bit higher than the mean "crude" risk ratio of 1.53 because we use a Bayesian hierarchical model that synthesises evidence across all age groups. 
     + Expanding to 20-39 year olds, the risk in healthy sub-population would be `r mean(rr_healthy_30)` times lower than in the general population (95% interval from `r lci(rr_healthy_25)` to `r uci(rr_healthy_25)`).
@@ -659,20 +667,22 @@ write.csv(output_df, file = "output/bayesian-posteriors-shiny.csv")
 
 \pagebreak
 
-```{r prevalence-data, fig.cap = "Comparison of model-estimated prevalences (95% CI's reported by modelling studies) collected by @levin_assessing_2020 and our distributional assumptions: additional circles show 95% CIs recreated by assuming logit-normal distribution of prevalence. We group studies into 4 bands of mortality to mirror earlier figures. Please note that this approach produces discrepancies in a number of US estimates where the confidence intervals were skewed toward including 0. However, since we do not have access to source data, we decided to use the logit-normal assumption for all estimates. This assumption may have an effect of overestimating mortality risk in settings where prevalence was very low.", fig.height = 11.5, fig.width = 9.5, warning = FALSE}
+```{r prevalence-data, fig.cap = "Comparison of model-estimated prevalences (95% CI's reported by modelling studies) collected by @levin_assessing_2020 and our distributional assumptions: additional circles show 95% CIs recreated by assuming logit-normal distribution of prevalence. We group studies into 4 bands of mortality to mirror earlier figures. Please note that this approach produces discrepancies in a number of US estimates where the confidence intervals were skewed toward including 0. However, since we do not have access to source data, we decided to use the logit-normal assumption for all estimates. This assumption may have an effect of overestimating mortality risk in settings where prevalence was very low.", fig.height = 8, fig.width = 6, warning = FALSE}
 df %>% 
   mutate(midpoint_u = logit_mean + logit_sd*1.96, midpoint_l = logit_mean - logit_sd*1.96) %>%
   mutate(Median_Age = ifelse(is.na(Median_Age), 0, Median_Age)) %>%
     mutate(deaths_cut = cut(Deaths/Population, c(-Inf, 5/1e06, 50/1e06, 500/1e06, Inf),
                           c("<5 deaths per million", "5-50 deaths per million", 
                             "50-500 deaths per million", "> 500 deaths per million"))) %>%
-  ggplot(aes(x=ir, xmax = ir_high, xmin=ir_low, y=interaction(Study, AgeGroup))) + 
+  mutate(ylab = interaction(substr(Study, 1, 12), AgeGroup)) %>%
+  ggplot(aes(x=ir, xmax = ir_high, xmin=ir_low, y=ylab)) + 
   geom_point() + geom_errorbarh() +
   geom_point(aes(x = inv_logit(midpoint_l)), pch = 21) +
   geom_point(aes(x = inv_logit(midpoint_u)), pch = 21) +
   xlab("Infection rate (95% interval)") + ylab("") +
   facet_wrap(~ deaths_cut, ncol = 2, scales = "free") +
-  scale_x_log10()
+  scale_x_log10() +
+  theme_gray(base_size = 9)
 
 ```
 
