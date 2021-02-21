@@ -454,7 +454,7 @@ graph_risks <-
         Therapy =  1-((1-input$p_treatment)), 
         sta = (if (input$adjustment_status) "healthy" else "all"),
         population = (if (input$adjustment_population) "best" else "meta"),
-        Pctile = "95%"),
+        Pctile = "97.5%"),
       IndivRiskPull(
         Age_Range = input$ages,
         gender = input$gender,
@@ -462,7 +462,23 @@ graph_risks <-
         Therapy =  1-((1-input$p_treatment)),
         sta = (if (input$adjustment_status) "healthy" else "all"),
         population = (if (input$adjustment_population) "best" else "meta"),
-        Pctile = "95%")
+        Pctile = "97.5%"),
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = input$gender,
+        outcome = 'death',
+        Therapy =  1-((1-input$p_treatment)), 
+        sta = (if (input$adjustment_status) "healthy" else "all"),
+        population = (if (input$adjustment_population) "best" else "meta"),
+        Pctile = "2.5%"),
+      IndivRiskPull(
+        Age_Range = input$ages,
+        gender = input$gender,
+        outcome = 'hosp',
+        Therapy =  1-((1-input$p_treatment)),
+        sta = (if (input$adjustment_status) "healthy" else "all"),
+        population = (if (input$adjustment_population) "best" else "meta"),
+        Pctile = "2.5%")
   )
   )
 
@@ -477,15 +493,18 @@ renderPlot({
   out_95_percent <- 
     tribble(
       ~out_95, ~status,
-      graph_risks()[3], "Death",
-      graph_risks()[4], "Hospitalized",
+      graph_risks()[5], "Death",
+      graph_risks()[6], "Hospitalized",
+      graph_risks()[3]-graph_risks()[5], "Death",
+      graph_risks()[4]-graph_risks()[6], "Hospitalized",
     )
+
   
   # the code below might look weird but it's just vanilla ggplot2. https://dcl-data-vis.stanford.edu/ggplot2-basics.html is a decent start, https://r4ds.had.co.nz/data-visualisation.html is also a great resource!!
   out_95_percent %>% 
     ggplot(aes(status, out_95)) +
-    geom_col(fill =c("#1B2B65")) +
-    scale_y_continuous(labels = scales::label_percent(scale = 10), breaks = scales::breaks_pretty(7), limits = c(0, 10^(round(log10(graph_risks()[4]))+0.5))) +
+    geom_col(fill =c("#FFFFFF","#FFFFFF","#1B2B65","#1B2B65"), alpha=c(0,0,1,1)) +
+    scale_y_continuous(labels = scales::label_percent(scale = 10), breaks = scales::breaks_pretty(7)) +#, limits = c(0, 10^(round(log10(graph_risks()[4]))+0.5))) +
     labs(
       title = "Risk by Outcome",
       subtitle = "95% probability that actual value is in contained within the blue shaded region",
