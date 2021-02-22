@@ -671,6 +671,7 @@ write.csv(output_df, file = "output/bayesian-posteriors-shiny.csv")
 
 \pagebreak
 
+
 ```{r prevalence-data, fig.cap = "Comparison of model-estimated prevalences (95% CI's reported by modelling studies) collected by @levin_assessing_2020 and our distributional assumptions: additional circles show 95% CIs recreated by assuming logit-normal distribution of prevalence. We group studies into 4 bands of mortality to mirror earlier figures. Please note that this approach produces discrepancies in a number of US estimates where the confidence intervals were skewed toward including 0. However, since we do not have access to source data, we decided to use the logit-normal assumption for all estimates. This assumption may have an effect of overestimating mortality risk in settings where prevalence was very low.", fig.height = 8, fig.width = 6, warning = FALSE}
 df %>% 
   mutate(midpoint_u = logit_mean + logit_sd*1.96, midpoint_l = logit_mean - logit_sd*1.96) %>%
@@ -691,6 +692,14 @@ df %>%
 ```
 
 \pagebreak
+
+
+# Summary of included studies and complete input data
+
+
+We present two tables, one listing all study-level information and another breaking down information by age group.
+References to all included studies are given in a separate bibliography at the end of this appendix. Below the table, we provide a list that can be used to cross-reference study locations with their bibliographic references.
+
 
 ```{r input-data-studies}
 df_tab <- all_data_xls %>% 
@@ -716,7 +725,7 @@ df_tab_joint <- df_tab %>% group_by(Study, EndDate) %>%
             IFR = sum(InfectionRate*Population)/sum(Population),
             .groups = "keep")
 
-study_xref <- all_data_xls %>% select(Study, StudyID) %>% distinct()
+study_xref <- all_data_xls %>% select(Study, StudyID) %>% distinct() %>% arrange(Study)
 
 write.csv(df_tab, file = '../ShinyApp/source_data.csv') # For the app.
 write.csv(df_tab_joint, file = '../ShinyApp/source_data_studies.csv') # For the app.
@@ -730,7 +739,10 @@ df_tab_joint %>%
   column_spec(3, width = "4cm")
 
 ```
-`r paste(paste0(study_xref$Study, ": ", paste0("@", study_xref$StudyID)), collapse = ", ")`
+
+
+
+`r paste("", paste0(study_xref$Study, ": ", paste0("@", study_xref$StudyID)), collapse = "; ")`
 
 ```{r  input-data-big}
 
@@ -745,6 +757,9 @@ df_tab %>%
   add_header_above(c(" " = 4, "Infection rate (%)" = 3, " " = 1))
 ```
 
+
 \pagebreak
 
-# References
+
+
+# Additional references for the Appendix
