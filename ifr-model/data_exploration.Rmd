@@ -1,0 +1,83 @@
+---
+title: "Summary for version 2 of the risk model"
+author: "WW"
+date: "Last updated `r Sys.Date()`"
+output: 
+  bookdown::pdf_document2:
+    keep_tex: true
+    latex_engine: xelatex
+---
+
+# Categorising studies based on type of available variables
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(readxl)
+knitr::opts_chunk$set(echo = FALSE)
+
+df_summary <- read_excel("data/1DS_Meta_Dataset_16jun2021.xlsx",
+                         col_types = c(rep("guess", 3), rep("date", 3), rep("guess", 17))) %>%
+  mutate(StudyName = gsub(" Deaths", "", StudyName)) %>%
+  pivot_longer(cols = c("Population", "Infections", "Deaths", 
+                        "IFR", "ifr_ci95_low", "ifr_ci95_high", 
+                        "InfectionRate", "infrate_ci95_low", "infrate_ci95_high"),
+               values_to = "value",
+               names_to = "variable") %>%
+  filter(Use == 1) %>% 
+  filter(!is.na(value)) %>% 
+  # group_by(StudyName, StudyScale, Gender, StudyType, StartDate, MidpointDate, EndDate) %>% 
+  # tally() %>% 
+  group_by(StudyName, Gender, variable) %>% 
+  tally() %>% 
+  spread(variable, n)
+```
+
+Studies that have IFRs but no death data:
+
+```{r}
+filter(df_summary, !is.na(IFR), is.na(Deaths)) %>% pull(StudyName)
+```
+
+We set these studies aside. They are fit differently to the rest of the studies which have deaths and prevalences.
+
+Studies without death data, which must be disregarded until matching numbers of deaths are found:
+
+```{r}
+filter(df_summary, is.na(IFR), is.na(Deaths)) %>% pull(StudyName)
+```
+
+Studies with death data, but with other issues (numbers in each column correspond to number of datapoints --- NA means not collected):
+
+```{r}
+filter(df_summary, !is.na(Deaths), is.na(InfectionRate)) %>% select(StudyName, Gender, Deaths, IFR, Infections, Population) # %>% pull(StudyName)
+```
+
+* Buenos Aires seems to miss infection data altogether. 
+* Belgium misses infection data but we can use IFRs.
+* Two Indian provinces are missing population sizes.
+* For China, Czechia and 2 US states we can estimate infection rates from number of infections and population sizes
+
+Additionally, for some potentially eligible rows we are missing ranges (95% intervals) for infections:
+
+```{r}
+filter(df_summary, !is.na(Deaths), !is.na(InfectionRate), is.na(infrate_ci95_high) | is.na(infrate_ci95_low))
+```
+
+* For Canada there is some unusual discrepancy (mean missing, dispersion given)
+* For Jersey we don't have raw number of infections or a measure of dispersion.
+* For other 5 locations we can calculate `infrate` values because we have Infections and Population.
+
+53 studies have no issue with some values missing:
+
+```{r}
+filter(df_summary, !is.na(Deaths), !is.na(InfectionRate), !is.na(infrate_ci95_high)) %>% pull(StudyName)
+```
+
+For now it seems we can use 8 studies (7 + Belgium) with IFR data, 53 studies with "clean" prevalence and death data. 14 studies need addressing some questions and additional data cleaning. 33 studies will be discarded due to lack of mortality data.
+
+Of these potential 75 studies to be used, there is additional cleaning to do around (1) matching age groups, (2) automatically deciding which columns of data to use. Many studies report a few different statistics that could be used interchaneably (e.g. IFR, % infected, raw number of infections --- sometimes different statistics for different age bands). 
+
+# Cleaning the issues around age groups
+
+Work in progress ...
+
