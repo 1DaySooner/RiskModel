@@ -5,7 +5,7 @@
 #' @param age1u upper interval
 #' @param age2l lower end of the target interval
 #' @param age2u upper end of the target interval
-#' @param count number of events in each interval
+#' @param count number of events in each interval (from `age1l[i]` to `age1u[i]`)
 #'
 #' @return vector of length `age2l`
 #' @export
@@ -20,6 +20,8 @@
 #' )
 match_ages <- function(age1l, age1u, age2l, age2u, n) {
   
+  if(identical(age1l, age2l) && identical(age2l, age2u))
+    return(n)
   
   age1_all <- which((age1l == 0) & (age1u == Inf))
   age2_all <- which((age2l == 0) & (age2u == Inf))
@@ -34,10 +36,13 @@ match_ages <- function(age1l, age1u, age2l, age2u, n) {
     age1u <- age1u[-age1_all]
     n <- n[-age1_all]
   }
+
+  # if(length(age2l) > 1 && length(age2_all) == 1){
+  #   age2l <- age2l[-age2_all]
+  #   age2u <- age2u[-age2_all]
+  # }
   
-  if(!monotonic(age1l) || !monotonic(age2l) || 
-     !monotonic(age1u) || !monotonic(age2u)){
-    browser()
+  if(!is.monotonic(age1l) || !is.monotonic(age1u)){
     stop("Non-monotonic age vectors")
   }
   
@@ -46,31 +51,38 @@ match_ages <- function(age1l, age1u, age2l, age2u, n) {
   
   
   
-  if(is.infinite(age1u[N1]))
-    age1u[N1] <- 100
-  if(is.infinite(age2u[N2]))
-    age2u[N2] <- 100
+  age1u[is.infinite(age1u)] <- 100
+  age2u[is.infinite(age2u)] <- 100
   age1l[age1l==0] <- 1
   age2l[age2l==0] <- 1
+  
+  # if(is.infinite(age1u[N1]))
+  #   age1u[N1] <- 100
+  # for(i in 1:length(age2u)){
+  #   if(is.infinite(age2u[i])){
+  #     age2u[i] <- 100
+  #   }
+  # }
+  
+
   
   nast <- rep(NA, max(age1u))
   n2 <- 0*age2l
   
-  if(length(age2u) > 1){
-    for(i in 2:(length(age2u))) 
-      if(age2u[i-1] != (age2l[i] - 1))
-        stop("Target intervals do not touch: ", age2u[i-1],", ", age2l[i])
+  # if(length(age2u) > 1)
+  #   for(i in 2:(length(age2u))) 
+  #     if(age2u[i-1] != (age2l[i] - 1))
+  #       stop("Target intervals do not touch: ", age2u[i-1],", ", age2l[i])
+  
+  if(length(age1u) > 1)
     for(i in 2:(length(age1u))) 
       if(age1u[i-1] != (age1l[i] - 1))
         stop("Input intervals do not touch: ", age1u[i-1], ", ", age1l[i])
-    
-  }
   
   
   for(i in seq_along(n)){
     nast[age1l[i]:age1u[i]] <- n[i]/(age1u[i] - age1l[i] + 1)
   }
-  
   
   for(i in seq_along(age2l)){
     n2[i] <- sum(nast[age2l[i]:age2u[i]], na.rm = TRUE)
@@ -78,16 +90,6 @@ match_ages <- function(age1l, age1u, age2l, age2u, n) {
   
   
   n2
-}
-
-monotonic <- function(x) {
-  if(length(x) == 1)
-    return(TRUE)
-  for(i in 2:length(x))
-    if(x[i] <= x[i-1])
-      return(FALSE)
-  return(TRUE)
-  
 }
 
 age_interval <- function(x) {
@@ -104,11 +106,21 @@ age_interval <- function(x) {
 
 se_prop <- function(p, n) sqrt(p*(1-p)/n)
 
+prep_de_data <- function(data) {
+  data %>%
+    filter(!is.na(Population), !is.na(Deaths)) %>%
+    select(age_min, age_max, Population, Deaths) %>%
+    rename(population = Population,
+           deaths = Deaths)
+}
 
 prep_ir_data <- function(data, mps = mean_pop_size) {
+  if(is.null(data$InfectionRate))
+    browser()
+  
   dt_wide <- data %>% 
     # spread(variable, value) %>% 
-    filter(StudyType == "Seroprevalence") %>%
+    # filter(StudyType == "Seroprevalence") %>%
     mutate(InfectionRate = ifelse(is.na(InfectionRate), Infections/Population, InfectionRate)) %>%
     mutate(population = Population,
            ir = InfectionRate/100, 
@@ -117,17 +129,16 @@ prep_ir_data <- function(data, mps = mean_pop_size) {
     select(age_min, age_max, 
            population,
            ir, ir_low, ir_high)
-  browser()
-  if(any(is.na(dt_wide$InfectionRate)))
-    stop("Can't calculate IR based on these data")
+  # if(any(is.na(dt_wide$ir)))
+    # stop("Can't calculate IR based on these data")
   
   dt_wide %>%
+    filter(!is.na(ir)) %>%
     mutate(population = ifelse(is.na(population), mps, population)) %>%
     mutate(se = se_prop(ir/100, population)) %>%
     mutate(ir_high = ifelse(is.na(ir_high), ir + 1.96*se, ir_high)) %>% 
     mutate(ir_low  = ifelse(is.na(ir_low),  ir - 1.96*se, ir_low)) %>%
     select(-se, -population)
-  
 }
 
 
