@@ -36,7 +36,7 @@ match_ages <- function(age1l, age1u, age2l, age2u, n) {
     age1u <- age1u[-age1_all]
     n <- n[-age1_all]
   }
-
+  
   # if(length(age2l) > 1 && length(age2_all) == 1){
   #   age2l <- age2l[-age2_all]
   #   age2u <- age2u[-age2_all]
@@ -49,22 +49,10 @@ match_ages <- function(age1l, age1u, age2l, age2u, n) {
   N1 <- length(age1u)
   N2 <- length(age2u)
   
-  
-  
   age1u[is.infinite(age1u)] <- 100
   age2u[is.infinite(age2u)] <- 100
   age1l[age1l==0] <- 1
   age2l[age2l==0] <- 1
-  
-  # if(is.infinite(age1u[N1]))
-  #   age1u[N1] <- 100
-  # for(i in 1:length(age2u)){
-  #   if(is.infinite(age2u[i])){
-  #     age2u[i] <- 100
-  #   }
-  # }
-  
-
   
   nast <- rep(NA, max(age1u))
   n2 <- 0*age2l
@@ -114,31 +102,27 @@ prep_de_data <- function(data) {
            deaths = Deaths)
 }
 
-prep_ir_data <- function(data, mps = mean_pop_size) {
+prep_ir_data <- function(data, mps = medianps) {
   if(is.null(data$InfectionRate))
     browser()
   
-  dt_wide <- data %>% 
-    # spread(variable, value) %>% 
-    # filter(StudyType == "Seroprevalence") %>%
-    mutate(InfectionRate = ifelse(is.na(InfectionRate), Infections/Population, InfectionRate)) %>%
-    mutate(population = Population,
-           ir = InfectionRate/100, 
-           ir_low = infrate_ci95_low/100, 
-           ir_high = infrate_ci95_high/100) %>%
+  out <- data %>% 
+    mutate(population = ifelse(is.na(Population), 
+                               ifelse(is.na(InfectionRate) | is.na(Infections),
+                                      NA,
+                                      Infections/(InfectionRate/100)),
+                               Population)) %>%
+    mutate(infected = ifelse(is.na(Infections), 
+                             (InfectionRate/100)*Population, 
+                             Infections)) %>%
     select(age_min, age_max, 
-           population,
-           ir, ir_low, ir_high)
-  # if(any(is.na(dt_wide$ir)))
-    # stop("Can't calculate IR based on these data")
+           population, infected) %>%
+    filter(!is.na(infected))
   
-  dt_wide %>%
-    filter(!is.na(ir)) %>%
-    mutate(population = ifelse(is.na(population), mps, population)) %>%
-    mutate(se = se_prop(ir/100, population)) %>%
-    mutate(ir_high = ifelse(is.na(ir_high), ir + 1.96*se, ir_high)) %>% 
-    mutate(ir_low  = ifelse(is.na(ir_low),  ir - 1.96*se, ir_low)) %>%
-    select(-se, -population)
+  # if(any(out$population < out$infected))
+    # browser()
+  
+  return(out)
 }
 
 
@@ -158,4 +142,39 @@ check_age_groups <- function(data) {
   v
 }
 
+
+remove_all_row <- function(df) {
+  wh <- which(df$age_min == 0 & df$age_max == Inf)
+  if(length(wh) == 0)
+    return(df)
+  if(length(wh) > 1){
+    browser()
+    stop("Multiple rows with ALL ages???")
+  }
+  if(nrow(df) == 1) {
+    return(df)
+  }
+  return(df[-wh,])
+}
+
+
+construct_inputs <- function(id, dd) {
+  if(nrow(dd) == 0)
+    return(NULL)
+  if(nrow(id) == 0)
+    return(NULL)
+  if(nrow(dd) == 1){
+    id <- remove_all_row(id)
+    return(mutate(dd, 
+                  infected = sum(id$infected),
+                  pop_i = sum(id$population)) %>%
+             rename(pop_d = population))
+  } else {
+    id$deaths <- match_ages(dd$age_min, dd$age_max, 
+                            id$age_min, id$age_max, dd$deaths)
+    id$pop_d  <- match_ages(dd$age_min, dd$age_max, 
+                            id$age_min, id$age_max, dd$population)
+    return(rename(id, pop_i = population))
+  }
+}
 
