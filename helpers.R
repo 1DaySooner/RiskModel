@@ -94,69 +94,27 @@ age_interval <- function(x) {
 
 se_prop <- function(p, n) sqrt(p*(1-p)/n)
 
-prep_de_data <- function(data) {
-  data %>%
-    filter(!is.na(Population), !is.na(Deaths)) %>%
-    select(age_min, age_max, Population, Deaths) %>%
-    rename(population = Population,
-           deaths = Deaths)
-}
-
-prep_ir_data <- function(data, mps = medianps) {
-  if(is.null(data$InfectionRate))
-    browser()
-  
-  out <- data %>% 
-    mutate(population = ifelse(is.na(Population), 
-                               ifelse(is.na(InfectionRate) | is.na(Infections),
-                                      NA,
-                                      Infections/(InfectionRate/100)),
-                               Population)) %>%
-    mutate(infected = ifelse(is.na(Infections), 
-                             (InfectionRate/100)*Population, 
-                             Infections)) %>%
-    select(age_min, age_max, 
-           population, infected) %>%
-    filter(!is.na(infected))
-  
-  # if(any(out$population < out$infected))
-    # browser()
-  
-  return(out)
-}
-
-
-check_age_groups <- function(data) {
-  p_dt <- filter(data, variable == "Population") %>% arrange(age_min)
-  d_dt <- filter(data, variable == "Deaths")
-  i_dt <- filter(data, variable != "Deaths" & variable != "Population") %>%
-    prep_ir_data()
-  
-  p_gr <- sort(unique(p_rows$AgeGroup))
-  d_gr <- sort(unique(d_rows$AgeGroup))
-  i_gr <- sort(unique(i_rows$AgeGroup))
-  
-  if(identical(p_gr, d_gr))
-    return(1)
-  v <- round(match_ages(p_dt$age_min, p_dt$age_max, d_dt$age_min, d_dt$age_max, p_dt$value))
-  v
-}
-
-
-remove_all_row <- function(df) {
+find_all_row <- function(df){
   wh <- which(df$age_min == 0 & df$age_max == Inf)
-  if(length(wh) == 0)
-    return(df)
   if(length(wh) > 1){
     browser()
     stop("Multiple rows with ALL ages???")
   }
-  if(nrow(df) == 1) {
-    return(df)
-  }
-  return(df[-wh,])
+  if(length(wh) == 0)
+    wh <- 0
+  
+  wh
 }
 
+remove_all_row <- function(df) {
+  wh <- find_all_row(df)
+  if(nrow(df) == 1) 
+    return(df)
+  if(wh == 0)
+    return(df)
+  else 
+    return(df[-wh,])
+}
 
 construct_inputs <- function(id, dd) {
   if(nrow(dd) == 0)
@@ -164,11 +122,20 @@ construct_inputs <- function(id, dd) {
   if(nrow(id) == 0)
     return(NULL)
   if(nrow(dd) == 1){
-    id <- remove_all_row(id)
-    return(mutate(dd, 
-                  infected = sum(id$infected),
-                  pop_i = sum(id$population)) %>%
-             rename(pop_d = population))
+    wh <- find_all_row(id)
+    if(wh > 0){
+      # cat("A")
+      return(
+        full_join(rename(id[wh,], pop_i = population), dd,
+                  by = c("age_min", "age_max")) %>%
+        rename(pop_d = population))
+    } else {
+      id <- remove_all_row(id)
+      return(mutate(dd, 
+                    infected = sum(id$infected),
+                    pop_i = sum(id$population)) %>%
+               rename(pop_d = population))
+    }
   } else {
     id$deaths <- match_ages(dd$age_min, dd$age_max, 
                             id$age_min, id$age_max, dd$deaths)
