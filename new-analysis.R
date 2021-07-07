@@ -77,7 +77,8 @@ t4 <- full_join(t2, t3, by = c("unit", "age_min", "age_max")) %>%
   mutate(# Construct age median covariate (THIS WILL BE FIXED)
          age_max = ifelse(is.infinite(age_max), 100, age_max),
          age_median = age_min + (age_max - age_min)/2 + .5
-  )
+  ) %>%
+  filter(unit != "Diamond PrincessBoth")
 
 # Grab infection rates inputs:
 t5 <- t4 %>% 
@@ -122,6 +123,7 @@ t7 <- t5 %>%
     ir_uci = ifelse(ir_uci <= 0, .00001, ir_uci),
     ir_lci =  ifelse(ir_lci <= 0, .000001, ir_lci)) %>%
   transmute(
+    unit = unit,
     mean_prevalence = logit(ir),
     sd_prevalence = (logit(ir_uci) - logit(ir_lci))/(2*1.96),
     obs_deaths = round(deaths),
@@ -170,48 +172,82 @@ data.frame(t7, age = t5$age_median) %>%
   ggplot(aes(x = age, y = obs_deaths/population)) + geom_point() +
   scale_y_log10()
 
-stan_data <- list_modify(
-  as.list(t7),
-  mean_ifr = array(NA, c(0)),
-  se_ifr = array(NA, c(0)),
-  N = nrow(t7),
-  N1 = nrow(t7),
-  N2 = 0,
-  Np = 1,
-  X = array(c(
-    t5$age_median),
-    dim = c(nrow(t5), 1)),
-  loc = as.numeric(factor(c(t5$unit))),
-  Nloc = length(unique(c(t5$unit)))
-)
+# stan_data <- list_modify(
+#   as.list(t7),
+#   mean_ifr = array(NA, c(0)),
+#   se_ifr = array(NA, c(0)),
+#   N = nrow(t7),
+#   N1 = nrow(t7),
+#   N2 = 0,
+#   Np = 1,
+#   X = array(c(
+#     (t5$age_median - 25)/10),
+#     dim = c(nrow(t5), 1)),
+#   loc = as.numeric(factor(c(t5$unit))),
+#   Nloc = length(unique(c(t5$unit)))
+# )
+# 
+# stan_data_old <- list_modify(
+#   as.list(t7),
+#   N = nrow(t7),
+#   Np = 1,
+#   X = array(c(
+#     (t5$age_median - 25)/10),
+#     dim = c(nrow(t5), 1)),
+#   loc = as.numeric(factor(c(t5$unit))),
+#   Nloc = length(unique(c(t5$unit)))
+# )
 
-stan_data_old <- list_modify(
-  as.list(t7),
-  N = nrow(t7),
-  Np = 1,
-  X = array(c(
-    t5$age_median),
-    dim = c(nrow(t5), 1)),
-  loc = as.numeric(factor(c(t5$unit))),
-  Nloc = length(unique(c(t5$unit)))
-)
-
+stan_data_rs <- stan_data
+stan_data_rs$X <- NULL
+# stan_data_rs$x <- (t5$age_median - 25)/10
+stan_data_rs$x <- (c(t5$age_median, t6$age_median) - 25)/10
 
 library(rstan)
 rstan_options(auto_write = TRUE)
 sm <- stan_model("ifr-model/new-model-v2.stan")
 sm_old <- stan_model("ifr-model/ifr_with0.stan")
+sm_rs <- stan_model("ifr-model/new-model-v3.stan")
 options(mc.cores = 4, digits = 3)
 
-fit <- sampling(sm, data = stan_data, 
+fit1 <- sampling(sm, data = stan_data, 
                 control = list(max_treedepth = 20), 
                 iter = 500, 
                 pars = c("logit_ifr", "prevalence"), include = FALSE)
-fit <- sampling(sm_old, data = stan_data_old, 
+fit2 <- sampling(sm_old, data = stan_data_old, 
                 control = list(max_treedepth = 15), 
                 iter = 500, 
                 pars = c("logit_ifr", "prevalence"), include = FALSE)
+fit3 <- sampling(sm_rs, data = stan_data_rs, 
+                control = list(max_treedepth = 15), 
+                iter = 500, 
+                pars = c("logit_ifr"), include = FALSE)
 
+a <- stan_data_rs$mean_prevalence
+b <- apply(as.matrix(fit3, "prevalence"), 2, mean)
+plot(b~a, xlab = "obs")
+
+# t5[c(201,205,144,243,148,104),]
+# t7[c(201,205,144,243,148,104),]
+# a[c(201,205,144,243,148,104)]
+
+data.frame(study    = t7$unit, 
+           age      = as.character(t5$age_median),
+           observed = t7$obs_deaths,
+           summary(fit3, "ppc_deaths")$summary) %>% 
+  mutate_if(is.numeric, function(x) x/t7$population) %>%
+  mutate(deaths_cut = cut(observed, c(-Inf, 5/1e06, 50/1e06, 500/1e06, Inf),
+                          c("<5 deaths per million", "5-50 deaths per million", 
+                            "50-500 deaths per million", "> 500 deaths per million"))) %>%
+  mutate(ylab = interaction(substr(study, 1, 12), age)) %>%
+  ggplot(aes(y=ylab)) + 
+  geom_point(aes(x = mean)) + 
+  geom_errorbarh(aes(xmin = X2.5., xmax = X97.5.)) + 
+  geom_point(aes(x = observed), color = "red") + 
+  facet_wrap(~deaths_cut, ncol = 2, scales = "free") +
+  scale_x_log10() +
+  xlab("COVID-attributable fatality risk") + ylab("") +
+  theme_grey(base_size = 9)
 
 mutate(t2, ratio = deaths/population) %>% 
   select(unit, age_min, age_max, deaths, population, ratio) %>% 
